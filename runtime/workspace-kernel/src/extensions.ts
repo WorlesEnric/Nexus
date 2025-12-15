@@ -126,7 +126,7 @@ export class HttpExtension implements Extension {
       maxConcurrent: config.maxConcurrent ?? 10,
       defaultTimeout: config.defaultTimeout ?? 30000,
       userAgent: config.userAgent ?? 'Nexus-Runtime/1.0',
-      allowedDomains: config.allowedDomains,
+      ...(config.allowedDomains !== undefined && { allowedDomains: config.allowedDomains }),
     };
   }
 
@@ -260,7 +260,7 @@ export class HttpExtension implements Extension {
         const response = await fetch(config.url, {
           method: config.method ?? 'GET',
           headers,
-          body,
+          ...(body !== undefined && { body }),
           signal: controller.signal,
         });
 

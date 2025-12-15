@@ -354,7 +354,7 @@ export class PanelManager extends EventEmitter {
     return {
       id: panel.config.id,
       kind: panel.config.kind,
-      title: panel.config.title,
+      ...(panel.config.title !== undefined && { title: panel.config.title }),
       status: panel.status,
       state: panel.state,
       tools: panel.config.tools.map(t => t.name),

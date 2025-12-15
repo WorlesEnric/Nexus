@@ -2,7 +2,7 @@
  * @nexus/reactor - State Store
  */
 
-import type { RuntimeValue, StateNode, ComputedNode, DataAST, NXMLPrimitiveType, StateKey, SubscriberId } from '../core/types';
+import type { RuntimeValue, DataAST, NXMLPrimitiveType, StateKey, SubscriberId } from '../core/types';
 import { StateError } from '../core/errors';
 import { getDefaultForType, cloneValue } from '../utils/coercion';
 import { evaluateExpression } from '../utils/expression';

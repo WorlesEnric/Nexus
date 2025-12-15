@@ -7,17 +7,11 @@
  */
 
 import type { NOGEntity, EntityCategory } from './entity';
-import type { NOGRelationship, RelationshipType } from './relationship';
-import { 
-  generateEntityId, 
-  createEntity,
-  updateEntity 
-} from './entity';
-import { 
-  generateRelationshipId, 
-  createRelationship,
+import type { NOGRelationship } from './relationship';
+import { updateEntity } from './entity';
+import {
   getOutgoingRelationships,
-  getIncomingRelationships 
+  getIncomingRelationships
 } from './relationship';
 
 // =============================================================================

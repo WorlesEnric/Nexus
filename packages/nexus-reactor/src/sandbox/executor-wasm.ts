@@ -22,7 +22,6 @@ import type {
   StateMutation,
   EmittedEvent,
   ViewCommand,
-  SuspensionDetails,
   ExecutionMetrics,
 } from './wasm-bridge.types';
 import { HANDLER_TIMEOUT_MS } from '../core/constants';
@@ -67,16 +66,20 @@ export class WasmSandboxExecutor {
     try {
       // NOTE: This will fail until the Rust implementation is complete
       // For now, this serves as the type-safe interface
+      // @ts-expect-error - @nexus/wasm-bridge is not yet implemented
       const { WasmRuntime: WasmRuntimeImpl } = await import('@nexus/wasm-bridge');
-      this.runtime = new WasmRuntimeImpl(this.config);
+      const runtime = new WasmRuntimeImpl(this.config);
+      this.runtime = runtime;
       debug.log('WASM runtime initialized successfully');
-      return this.runtime;
+      return runtime;
     } catch (error) {
       throw new SandboxError(
         'Failed to initialize WASM runtime. Ensure @nexus/wasm-bridge is built and installed.',
         {
           cause: error as Error,
-          hint: 'Run: cd runtime/nexus-wasm-bridge && cargo build --release',
+          details: {
+            hint: 'Run: cd runtime/nexus-wasm-bridge && cargo build --release',
+          },
         }
       );
     }
@@ -141,7 +144,7 @@ export class WasmSandboxExecutor {
 
       // 2. Execute the async I/O in JavaScript
       const suspension = result.suspension!;
-      let ioResult: { success: boolean; value?: unknown; error?: string };
+      let ioResult: { success: true; value: unknown } | { success: false; error: string };
 
       try {
         const ext = context.$ext[suspension.extensionName];
@@ -175,9 +178,11 @@ export class WasmSandboxExecutor {
       throw new SandboxError(
         `Handler execution failed: ${result.error.message}`,
         {
-          code: result.error.code,
-          stack: result.error.stack,
-          location: result.error.location,
+          details: {
+            code: result.error.code,
+            stack: result.error.stack,
+            location: result.error.location,
+          },
         }
       );
     }
@@ -317,7 +322,7 @@ export class WasmSandboxExecutor {
   /**
    * Infer capabilities from handler code (fallback if not declared)
    */
-  private inferCapabilities(handler: HandlerNode): CapabilityToken[] {
+  private inferCapabilities(_handler: HandlerNode): CapabilityToken[] {
     // For now, grant all capabilities if not declared
     // TODO: Implement static analysis to infer required capabilities
     debug.warn('Handler has no declared capabilities, granting all (unsafe!)');

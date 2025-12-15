@@ -131,7 +131,7 @@ export function clearTransientProps(registry: ViewRegistry, id: string): void {
 function createViewHandle(
   registry: ViewRegistry,
   id: string,
-  forceUpdate: () => void
+  _forceUpdate: () => void
 ): ViewHandle {
   return {
     setProp(prop: string, value: unknown): void {

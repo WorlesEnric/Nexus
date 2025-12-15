@@ -34,7 +34,7 @@ import type {
 /**
  * Base interface for all view nodes
  */
-export interface ViewNodeBase extends BaseNode {
+export interface ViewNodeBase<P = Record<string, unknown>> extends BaseNode {
   /**
    * Component type name
    */
@@ -45,17 +45,17 @@ export interface ViewNodeBase extends BaseNode {
    * Required for referencing via $view (e.g., $view.getElementById('logs'))
    */
   id?: string;
-  
+
   /**
    * Component properties (may contain binding expressions)
    */
-  props: Record<string, unknown>;
-  
+  props: P;
+
   /**
    * Child nodes
    */
   children: ViewNode[];
-  
+
   /**
    * Layout information injected by LayoutEngine
    * Not present in raw XML, added during layout computation
@@ -131,7 +131,7 @@ export interface LayoutProps {
  * </Layout>
  * ```
  */
-export interface LayoutNode extends ViewNodeBase {
+export interface LayoutNode extends ViewNodeBase<LayoutProps> {
   type: 'Layout';
   props: LayoutProps;
 }
@@ -166,7 +166,7 @@ export interface ContainerProps {
  * </Container>
  * ```
  */
-export interface ContainerNode extends ViewNodeBase {
+export interface ContainerNode extends ViewNodeBase<ContainerProps> {
   type: 'Container';
   props: ContainerProps;
 }
@@ -200,7 +200,7 @@ export interface IfProps {
  * </If>
  * ```
  */
-export interface IfNode extends ViewNodeBase {
+export interface IfNode extends ViewNodeBase<IfProps> {
   type: 'If';
   props: IfProps;
 }
@@ -240,7 +240,7 @@ export interface IterateProps {
  * </Iterate>
  * ```
  */
-export interface IterateNode extends ViewNodeBase {
+export interface IterateNode extends ViewNodeBase<IterateProps> {
   type: 'Iterate';
   props: IterateProps;
 }
@@ -272,7 +272,7 @@ export interface TextProps {
 /**
  * Text display node
  */
-export interface TextNode extends ViewNodeBase {
+export interface TextNode extends ViewNodeBase<TextProps> {
   type: 'Text';
   props: TextProps;
 }
@@ -310,7 +310,7 @@ export interface MetricProps {
 /**
  * Metric display node (stat card)
  */
-export interface MetricNode extends ViewNodeBase {
+export interface MetricNode extends ViewNodeBase<MetricProps> {
   type: 'Metric';
   props: MetricProps;
 }
@@ -343,7 +343,7 @@ export interface StatusBadgeProps {
 /**
  * Status badge display node
  */
-export interface StatusBadgeNode extends ViewNodeBase {
+export interface StatusBadgeNode extends ViewNodeBase<StatusBadgeProps> {
   type: 'StatusBadge';
   props: StatusBadgeProps;
 }
@@ -377,7 +377,7 @@ export interface LogStreamProps {
 /**
  * Log stream display node
  */
-export interface LogStreamNode extends ViewNodeBase {
+export interface LogStreamNode extends ViewNodeBase<LogStreamProps> {
   type: 'LogStream';
   props: LogStreamProps;
 }
@@ -419,7 +419,7 @@ export interface InputProps {
 /**
  * Text input node
  */
-export interface InputNode extends ViewNodeBase {
+export interface InputNode extends ViewNodeBase<InputProps> {
   type: 'Input';
   props: InputProps;
 }
@@ -468,7 +468,7 @@ export interface ButtonProps {
 /**
  * Button node
  */
-export interface ButtonNode extends ViewNodeBase {
+export interface ButtonNode extends ViewNodeBase<ButtonProps> {
   type: 'Button';
   props: ButtonProps;
 }
@@ -501,7 +501,7 @@ export interface SwitchProps {
 /**
  * Toggle switch node
  */
-export interface SwitchNode extends ViewNodeBase {
+export interface SwitchNode extends ViewNodeBase<SwitchProps> {
   type: 'Switch';
   props: SwitchProps;
 }
@@ -548,7 +548,7 @@ export interface ChartProps {
 /**
  * Chart visualization node
  */
-export interface ChartNode extends ViewNodeBase {
+export interface ChartNode extends ViewNodeBase<ChartProps> {
   type: 'Chart';
   props: ChartProps;
 }
@@ -597,9 +597,92 @@ export interface ActionProps {
 /**
  * Action node (semantic button for triggering tools)
  */
-export interface ActionNode extends ViewNodeBase {
+export interface ActionNode extends ViewNodeBase<ActionProps> {
   type: 'Action';
   props: ActionProps;
+}
+
+// =============================================================================
+// Custom Component Extension
+// =============================================================================
+
+/**
+ * CustomComponent props for loading external React components
+ */
+export interface CustomComponentProps {
+  /**
+   * Optional ID for imperative view manipulation
+   */
+  id?: string;
+
+  /**
+   * Module path to load the component from
+   * Can be:
+   * - npm package: "@nexus-panels/figma-x6-editor"
+   * - local file: "./components/MyComponent"
+   * - CDN URL: "https://cdn.example.com/panel.js"
+   */
+  module: string;
+
+  /**
+   * Component name to import from the module
+   * @example "FigmaEditor", "AdvancedChart"
+   */
+  component: string;
+
+  /**
+   * State bindings to pass as props to the custom component
+   * Key is prop name, value is binding expression
+   * @example { document: "$state.document", selection: "$state.selection" }
+   */
+  bindings?: Record<string, BindingExpression>;
+
+  /**
+   * Event handlers for custom component events
+   * Key is event name (without 'on' prefix), value is handler expression
+   * @example { change: "(doc) => { $state.document = doc; }" }
+   */
+  events?: Record<string, Expression>;
+
+  /**
+   * Additional static props to pass to the component
+   */
+  [key: string]: unknown;
+}
+
+/**
+ * Custom component node for embedding external React components
+ *
+ * This allows users to create highly customized panels that cannot be
+ * easily modeled by declarative NXML. The custom component can access
+ * NXML state through bindings and trigger NXML handlers through events.
+ *
+ * @example
+ * ```xml
+ * <CustomComponent
+ *   module="@nexus-panels/figma-x6-editor"
+ *   component="FigmaEditor"
+ *   bind:document="$state.document"
+ *   bind:selection="$state.selection"
+ *   on:change="(doc) => { $state.document = doc; }"
+ *   on:save="() => { $emit('save', $state.document); }"
+ * />
+ * ```
+ *
+ * @example Local component
+ * ```xml
+ * <CustomComponent
+ *   module="./components/AdvancedChart"
+ *   component="AdvancedChart"
+ *   bind:data="$state.chartData"
+ *   bind:config="$state.chartConfig"
+ *   on:dataPointClick="(point) => { $state.selectedPoint = point; }"
+ * />
+ * ```
+ */
+export interface CustomComponentNode extends ViewNodeBase<CustomComponentProps> {
+  type: 'CustomComponent';
+  props: CustomComponentProps;
 }
 
 // =============================================================================
@@ -623,12 +706,13 @@ export type ViewNode =
   | SwitchNode
   | ChartNode
   | ActionNode
+  | CustomComponentNode
   | GenericViewNode;
 
 /**
  * Generic view node for unknown/custom components
  */
-export interface GenericViewNode extends ViewNodeBase {
+export interface GenericViewNode extends ViewNodeBase<Record<string, unknown>> {
   type: string;
   props: Record<string, unknown>;
 }
@@ -671,6 +755,10 @@ export function isIterateNode(node: ViewNode): node is IterateNode {
 
 export function isControlFlowNode(node: ViewNode): node is IfNode | IterateNode {
   return isIfNode(node) || isIterateNode(node);
+}
+
+export function isCustomComponentNode(node: ViewNode): node is CustomComponentNode {
+  return node.type === 'CustomComponent';
 }
 
 // =============================================================================
@@ -807,13 +895,15 @@ export function getAllBindings(root: ViewNode): BindingExpression[] {
  */
 export function getAllTriggers(root: ViewNode): string[] {
   const triggers: string[] = [];
-  
+
   traverseViewTree(root, (node) => {
-    const trigger = node.props['trigger'];
-    if (typeof trigger === 'string') {
-      triggers.push(trigger);
+    if ('trigger' in node.props) {
+      const trigger = node.props.trigger;
+      if (typeof trigger === 'string') {
+        triggers.push(trigger);
+      }
     }
   });
-  
+
   return triggers;
 }

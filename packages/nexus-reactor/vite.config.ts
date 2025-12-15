@@ -11,11 +11,12 @@ export default defineConfig({
     },
   },
   build: {
+    outDir: resolve(__dirname, 'dist'),
     lib: {
       entry: resolve(__dirname, 'src/index.ts'),
       name: 'NexusReactor',
-      fileName: 'index',
-      formats: ['es'],
+      fileName: (format) => format === 'es' ? 'index.js' : 'index.cjs',
+      formats: ['es', 'cjs'],
     },
     rollupOptions: {
       external: ['react', 'react-dom'],

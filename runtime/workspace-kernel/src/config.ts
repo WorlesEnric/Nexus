@@ -39,7 +39,7 @@ const defaultConfig: AppConfig = {
 /**
  * Deep merge two objects
  */
-function deepMerge<T extends Record<string, unknown>>(
+function deepMerge<T>(
   target: T,
   source: DeepPartial<T>
 ): T {
@@ -59,8 +59,8 @@ function deepMerge<T extends Record<string, unknown>>(
       !Array.isArray(targetValue)
     ) {
       result[key] = deepMerge(
-        targetValue as Record<string, unknown>,
-        sourceValue as DeepPartial<Record<string, unknown>>
+        targetValue,
+        sourceValue as DeepPartial<typeof targetValue>
       ) as T[keyof T];
     } else if (sourceValue !== undefined) {
       result[key] = sourceValue as T[keyof T];
@@ -76,50 +76,45 @@ function deepMerge<T extends Record<string, unknown>>(
 function loadFromEnv(): DeepPartial<AppConfig> {
   const env = process.env;
 
-  return {
-    server: {
-      httpPort: env['HTTP_PORT'] ? parseInt(env['HTTP_PORT'], 10) : undefined,
-      wsPort: env['WS_PORT'] ? parseInt(env['WS_PORT'], 10) : undefined,
-      host: env['HOST'],
-      jwtSecret: env['JWT_SECRET'],
-      authEnabled: env['AUTH_ENABLED'] === 'true',
-      corsOrigins: env['CORS_ORIGINS']?.split(','),
-      bodyLimit: env['BODY_LIMIT'],
-    },
-    runtime: {
-      maxInstances: env['MAX_INSTANCES']
-        ? parseInt(env['MAX_INSTANCES'], 10)
-        : undefined,
-      minInstances: env['MIN_INSTANCES']
-        ? parseInt(env['MIN_INSTANCES'], 10)
-        : undefined,
-      memoryLimitBytes: env['MEMORY_LIMIT_MB']
-        ? parseInt(env['MEMORY_LIMIT_MB'], 10) * 1024 * 1024
-        : undefined,
-      timeoutMs: env['TIMEOUT_MS']
-        ? parseInt(env['TIMEOUT_MS'], 10)
-        : undefined,
-      maxHostCalls: env['MAX_HOST_CALLS']
-        ? parseInt(env['MAX_HOST_CALLS'], 10)
-        : undefined,
-      cacheDir: env['CACHE_DIR'],
-    },
-    extensions: {
-      http: {
-        maxConcurrent: env['HTTP_MAX_CONCURRENT']
-          ? parseInt(env['HTTP_MAX_CONCURRENT'], 10)
-          : undefined,
-        defaultTimeout: env['HTTP_TIMEOUT']
-          ? parseInt(env['HTTP_TIMEOUT'], 10)
-          : undefined,
-        allowedDomains: env['HTTP_ALLOWED_DOMAINS']?.split(','),
-      },
-    },
-    logging: {
-      level: env['LOG_LEVEL'] as AppConfig['logging']['level'],
-      pretty: env['LOG_PRETTY'] === 'true',
-    },
-  };
+  const config: any = {};
+
+  // Server config
+  const server: any = {};
+  if (env['HTTP_PORT']) server.httpPort = parseInt(env['HTTP_PORT'], 10);
+  if (env['WS_PORT']) server.wsPort = parseInt(env['WS_PORT'], 10);
+  if (env['HOST']) server.host = env['HOST'];
+  if (env['JWT_SECRET']) server.jwtSecret = env['JWT_SECRET'];
+  if (env['AUTH_ENABLED']) server.authEnabled = env['AUTH_ENABLED'] === 'true';
+  if (env['CORS_ORIGINS']) server.corsOrigins = env['CORS_ORIGINS'].split(',');
+  if (env['BODY_LIMIT']) server.bodyLimit = env['BODY_LIMIT'];
+  if (Object.keys(server).length > 0) config.server = server;
+
+  // Runtime config
+  const runtime: any = {};
+  if (env['MAX_INSTANCES']) runtime.maxInstances = parseInt(env['MAX_INSTANCES'], 10);
+  if (env['MIN_INSTANCES']) runtime.minInstances = parseInt(env['MIN_INSTANCES'], 10);
+  if (env['MEMORY_LIMIT_MB']) runtime.memoryLimitBytes = parseInt(env['MEMORY_LIMIT_MB'], 10) * 1024 * 1024;
+  if (env['TIMEOUT_MS']) runtime.timeoutMs = parseInt(env['TIMEOUT_MS'], 10);
+  if (env['MAX_HOST_CALLS']) runtime.maxHostCalls = parseInt(env['MAX_HOST_CALLS'], 10);
+  if (env['CACHE_DIR']) runtime.cacheDir = env['CACHE_DIR'];
+  if (Object.keys(runtime).length > 0) config.runtime = runtime;
+
+  // Extensions config
+  const httpExt: any = {};
+  if (env['HTTP_MAX_CONCURRENT']) httpExt.maxConcurrent = parseInt(env['HTTP_MAX_CONCURRENT'], 10);
+  if (env['HTTP_TIMEOUT']) httpExt.defaultTimeout = parseInt(env['HTTP_TIMEOUT'], 10);
+  if (env['HTTP_ALLOWED_DOMAINS']) httpExt.allowedDomains = env['HTTP_ALLOWED_DOMAINS'].split(',');
+  if (Object.keys(httpExt).length > 0) {
+    config.extensions = { http: httpExt };
+  }
+
+  // Logging config
+  const logging: any = {};
+  if (env['LOG_LEVEL']) logging.level = env['LOG_LEVEL'] as AppConfig['logging']['level'];
+  if (env['LOG_PRETTY']) logging.pretty = env['LOG_PRETTY'] === 'true';
+  if (Object.keys(logging).length > 0) config.logging = logging;
+
+  return config;
 }
 
 /**
@@ -149,10 +144,10 @@ function removeUndefined<T extends Record<string, unknown>>(obj: T): DeepPartial
  */
 export function loadConfig(overrides?: DeepPartial<AppConfig>): AppConfig {
   // Start with defaults
-  let config = { ...defaultConfig };
+  let config: AppConfig = { ...defaultConfig };
 
   // Merge environment variables
-  const envConfig = removeUndefined(loadFromEnv());
+  const envConfig = removeUndefined(loadFromEnv()) as DeepPartial<AppConfig>;
   config = deepMerge(config, envConfig);
 
   // Merge explicit overrides

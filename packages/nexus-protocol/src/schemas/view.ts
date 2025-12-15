@@ -185,17 +185,22 @@ export const ActionPropsSchema = z.object({
 // =============================================================================
 
 /**
+ * View node shape interface for recursive type definition
+ */
+export interface ViewNodeShape {
+  type: string;
+  id?: string | undefined;
+  props: Record<string, unknown>;
+  children: ViewNodeShape[];
+  layout?: { colSpan: number; className: string; newRow?: boolean | undefined } | undefined;
+  loc?: { startLine: number; startColumn: number; endLine: number; endColumn: number } | undefined;
+}
+
+/**
  * Base view node schema
  * Uses recursive definition for children
  */
-export const ViewNodeSchema: z.ZodType<{
-  type: string;
-  id?: string;
-  props: Record<string, unknown>;
-  children: unknown[];
-  layout?: z.infer<typeof LayoutInfoSchema>;
-  loc?: z.infer<typeof SourceLocationSchema>;
-}> = z.lazy(() =>
+export const ViewNodeSchema: z.ZodType<ViewNodeShape> = z.lazy(() =>
   z.object({
     type: z.string().min(1),
     id: z.string().optional(),

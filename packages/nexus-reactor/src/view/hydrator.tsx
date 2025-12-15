@@ -4,14 +4,15 @@
  * Transforms ViewAST into React components
  */
 
-import React, { useEffect, useReducer, useCallback, useRef, useMemo, createContext, useContext } from 'react';
+import React, { useEffect, useReducer, useCallback, useRef, useMemo, createContext, useContext, useState } from 'react';
 import type { ViewNode, RuntimeValue } from '../core/types';
-import { resolveBindings, isBindingExpression, extractExpression, evaluateExpression, parseArgsExpression } from '../utils/expression';
+import { isBindingExpression, extractExpression, evaluateExpression, parseArgsExpression } from '../utils/expression';
 import type { ViewRegistry } from './registry';
 import { registerComponent, unregisterComponent, getTransientProps } from './registry';
 import type { StateStore } from '../state/store';
 import { subscribe, unsubscribe, trackAccess } from '../state/store';
 import { getChildLayoutStyles } from '../layout/engine';
+import { getCustomComponent } from './custom-component-registry';
 
 // Component imports
 import { LayoutComponent } from '../components/Layout';
@@ -82,6 +83,151 @@ export function HydrationProvider({ stateStore, viewRegistry, executeTool, child
   );
 }
 
+/**
+ * Custom Component Renderer
+ * Handles loading and rendering of external custom components
+ */
+interface CustomComponentRendererProps {
+  node: ViewNode;
+  scope: Record<string, unknown>;
+  evalContext: Record<string, unknown>;
+}
+
+function CustomComponentRenderer({ node, scope, evalContext }: CustomComponentRendererProps) {
+  const ctx = useHydrationContext();
+  const [Component, setComponent] = useState<React.ComponentType<any> | null>(null);
+  const [error, setError] = useState<Error | null>(null);
+  const [, forceUpdate] = useReducer(x => x + 1, 0);
+
+  // Extract CustomComponent props
+  const module = node.props.module as string;
+  const componentName = node.props.component as string;
+  const bindings = (node.props.bindings as Record<string, string>) || {};
+  const events = (node.props.events as Record<string, string>) || {};
+
+  // Load the custom component
+  useEffect(() => {
+    if (!module || !componentName) {
+      setError(new Error('CustomComponent requires module and component props'));
+      return;
+    }
+
+    getCustomComponent(module, componentName)
+      .then(setComponent)
+      .catch(setError);
+  }, [module, componentName]);
+
+  // Subscribe to state changes for reactivity
+  useEffect(() => {
+    const id = `custom-${node.id ?? Math.random().toString(36).slice(2)}`;
+    subscribe(ctx.stateStore, forceUpdate, id);
+    return () => unsubscribe(ctx.stateStore, id);
+  }, [ctx.stateStore, node.id]);
+
+  // Resolve bindings to actual values
+  const resolvedBindings = useMemo(() => {
+    const result: Record<string, unknown> = {};
+
+    for (const [propName, bindingExpr] of Object.entries(bindings)) {
+      if (isBindingExpression(bindingExpr)) {
+        const expr = extractExpression(bindingExpr);
+        const value = trackAccess(ctx.stateStore, `custom-${node.id}`, () =>
+          evaluateExpression(expr, evalContext)
+        );
+        result[propName] = value;
+      } else {
+        // Direct binding path without curly braces (e.g., "$state.document")
+        const value = trackAccess(ctx.stateStore, `custom-${node.id}`, () =>
+          evaluateExpression(bindingExpr, evalContext)
+        );
+        result[propName] = value;
+      }
+    }
+
+    return result;
+  }, [bindings, evalContext, ctx.stateStore, node.id]);
+
+  // Create event handlers
+  const eventHandlers = useMemo(() => {
+    const handlers: Record<string, (...args: any[]) => void> = {};
+
+    for (const [eventName, handlerExpr] of Object.entries(events)) {
+      handlers[`on${eventName.charAt(0).toUpperCase()}${eventName.slice(1)}`] = (...args: any[]) => {
+        try {
+          // Create a function from the handler expression
+          // Handler expression is like "(doc) => { $state.document = doc; }"
+          const handlerFn = new Function(
+            '$state',
+            '$scope',
+            '$emit',
+            'args',
+            `return (${handlerExpr})(...args)`
+          );
+
+          handlerFn(
+            ctx.stateStore.proxy,
+            scope,
+            (eventName: string, data: unknown) => {
+              // $emit function for custom components to emit events
+              console.log(`Custom component emitted: ${eventName}`, data);
+            },
+            args
+          );
+        } catch (error) {
+          console.error(`Error in CustomComponent event handler "${eventName}":`, error);
+        }
+      };
+    }
+
+    return handlers;
+  }, [events, ctx.stateStore.proxy, scope]);
+
+  // Loading state
+  if (!Component && !error) {
+    return (
+      <div className="custom-component-loading">
+        Loading {componentName} from {module}...
+      </div>
+    );
+  }
+
+  // Error state
+  if (error) {
+    return (
+      <div className="custom-component-error" style={{ color: 'red', padding: '1rem' }}>
+        <strong>CustomComponent Error:</strong>
+        <pre>{error.message}</pre>
+      </div>
+    );
+  }
+
+  // Render the loaded component with resolved bindings and event handlers
+  const finalProps: Record<string, unknown> = {
+    ...node.props, // Pass through any other props
+    ...resolvedBindings,
+    ...eventHandlers,
+    children: node.children.length > 0 ? (
+      node.children.map((child, index) => (
+        <NXMLRenderer
+          key={child.id ?? `custom-child-${index}`}
+          node={child}
+          scope={scope}
+        />
+      ))
+    ) : undefined,
+  };
+
+  // Remove internal CustomComponent props that shouldn't be passed to the component
+  delete finalProps.module;
+  delete finalProps.component;
+  delete finalProps.bindings;
+  delete finalProps.events;
+
+  // Component is guaranteed to be non-null here due to guard checks above
+  if (!Component) return null;
+  return <Component {...finalProps} />;
+}
+
 interface NXMLRendererProps {
   node: ViewNode;
   scope?: Record<string, unknown>;
@@ -96,9 +242,9 @@ export function NXMLRenderer({ node, scope = {} }: NXMLRendererProps) {
   useEffect(() => {
     const id = `renderer-${node.id ?? Math.random().toString(36).slice(2)}`;
     subscriberIdRef.current = id;
-    
-    const unsub = subscribe(ctx.stateStore, forceUpdate, id);
-    
+
+    subscribe(ctx.stateStore, forceUpdate, id);
+
     return () => {
       unsubscribe(ctx.stateStore, id);
     };
@@ -112,18 +258,23 @@ export function NXMLRenderer({ node, scope = {} }: NXMLRendererProps) {
     }
   }, [node.id, node.type, ctx.viewRegistry]);
 
+  // Create evaluation context (needed for binding resolution)
+  const evalContext = {
+    $state: ctx.stateStore.proxy,
+    $scope: scope,
+  };
+
+  // Special handling for CustomComponent
+  if (node.type === 'CustomComponent') {
+    return <CustomComponentRenderer node={node} scope={scope} evalContext={evalContext} />;
+  }
+
   // Get the component
   const Component = ComponentRegistry[node.type];
   if (!Component) {
     console.warn(`Unknown component type: ${node.type}`);
     return null;
   }
-
-  // Create evaluation context
-  const evalContext = {
-    $state: ctx.stateStore.proxy,
-    $scope: scope,
-  };
 
   // Resolve props with bindings
   const resolvedProps = useMemo(() => {

@@ -156,7 +156,7 @@ export function validateNexusPanelAST(ast: unknown): PanelValidationResult {
   const toolNames = new Set(panel.logic.tools.map(t => t.name));
   
   // Validate view bindings
-  const { stateRefs, scopeRefs } = extractBindingReferences(panel.view.root);
+  const { stateRefs } = extractBindingReferences(panel.view.root);
   
   for (const ref of stateRefs) {
     if (!stateNames.has(ref)) {

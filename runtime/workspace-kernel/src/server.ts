@@ -10,6 +10,8 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { createServer, Server as HttpServer } from 'http';
 import { randomUUID } from 'crypto';
 import jwt from 'jsonwebtoken';
+import bcrypt from 'bcrypt';
+import { PrismaClient } from '@prisma/client';
 
 import type {
   ServerConfig,
@@ -24,12 +26,15 @@ import type {
   HealthResponse,
   ExecutionContext,
   AsyncResult,
+  PanelConfig,
 } from './types';
 import { CreatePanelRequestSchema } from './types';
 import { getPanelManager, PanelManager } from './panel';
 import { getExecutor, WasmExecutor } from './executor';
 import { getExtensionManager, ExtensionManager } from './extensions';
 import { logger } from './logger';
+import { StateEngine, createStateEngine } from './state';
+import { createMarketplaceRouter } from './marketplace/marketplace-router';
 
 /** Server instance */
 export class Server {
@@ -40,8 +45,10 @@ export class Server {
   private panelManager: PanelManager;
   private executor: WasmExecutor;
   private extensionManager: ExtensionManager;
+  private stateEngine: StateEngine | null = null;
   private startTime: Date;
   private clients: Map<string, WebSocketClient> = new Map();
+  private prisma: PrismaClient;
 
   constructor(config: AppConfig) {
     this.config = config.server;
@@ -49,6 +56,9 @@ export class Server {
     this.executor = getExecutor();
     this.extensionManager = getExtensionManager();
     this.startTime = new Date();
+
+    // Initialize Prisma
+    this.prisma = new PrismaClient();
 
     // Create Express app
     this.app = express();
@@ -77,6 +87,7 @@ export class Server {
 
     // Body parsing
     this.app.use(express.json({ limit: this.config.bodyLimit }));
+    this.app.use(express.urlencoded({ extended: true, limit: this.config.bodyLimit }));
 
     // Request logging
     this.app.use((req, res, next) => {
@@ -106,8 +117,8 @@ export class Server {
    * Authentication middleware
    */
   private authMiddleware(req: Request, res: Response, next: NextFunction): void {
-    // Skip auth for health check
-    if (req.path === '/health') {
+    // Skip auth for health check and auth routes
+    if (req.path === '/health' || req.path.startsWith('/auth/')) {
       return next();
     }
 
@@ -134,6 +145,11 @@ export class Server {
     // Health check
     this.app.get('/health', this.handleHealth.bind(this));
 
+    // Authentication routes (public, not protected by auth middleware)
+    this.app.post('/auth/token', this.handleLogin.bind(this));
+    this.app.post('/auth/signup', this.handleSignup.bind(this));
+    this.app.get('/auth/me', this.handleGetMe.bind(this));
+
     // Metrics
     this.app.get('/metrics', this.handleMetrics.bind(this));
 
@@ -146,6 +162,18 @@ export class Server {
 
     // Trigger handler execution
     this.app.post('/panels/:id/trigger/:tool', this.handleTrigger.bind(this));
+
+    // State Engine API
+    this.app.get('/state/status', this.handleStateStatus.bind(this));
+    this.app.get('/state/graph', this.handleGetGraph.bind(this));
+    this.app.get('/state/entities', this.handleGetEntities.bind(this));
+    this.app.get('/state/entities/:id', this.handleGetEntity.bind(this));
+    this.app.post('/state/patches', this.handleApplyPatch.bind(this));
+    this.app.post('/state/persist', this.handleForcePersist.bind(this));
+
+    // Marketplace API
+    const marketplaceRouter = createMarketplaceRouter(this.prisma, this.config.jwtSecret!);
+    this.app.use('/marketplace', marketplaceRouter);
 
     // Error handler
     this.app.use(this.errorHandler.bind(this));
@@ -160,7 +188,7 @@ export class Server {
       const url = new URL(request.url!, `http://${request.headers.host}`);
       const match = url.pathname.match(/^\/panels\/([^/]+)\/ws$/);
 
-      if (!match) {
+      if (!match || !match[1]) {
         socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
         socket.destroy();
         return;
@@ -208,7 +236,7 @@ export class Server {
 
     const client: WebSocketClient = {
       id: clientId,
-      socket: ws as unknown as WebSocket,
+      socket: ws,
       panelId,
       subscriptions: new Set(['state', 'events']), // Default subscriptions
       authenticated: true,
@@ -365,7 +393,7 @@ export class Server {
       // Send result to the triggering client
       this.sendToClient(client, {
         type: 'RESULT',
-        requestId,
+        ...(requestId !== undefined && { requestId }),
         result,
       });
     } catch (err) {
@@ -477,6 +505,161 @@ export class Server {
 
   // === HTTP Handlers ===
 
+  /**
+   * POST /auth/token
+   * Login endpoint - returns JWT token
+   */
+  private async handleLogin(req: Request, res: Response): Promise<void> {
+    try {
+      // Support both form-data (OAuth2PasswordRequestForm) and JSON
+      let email: string;
+      let password: string;
+
+      if (req.headers['content-type']?.includes('application/x-www-form-urlencoded')) {
+        // Form data format (OAuth2PasswordRequestForm uses 'username' for email)
+        email = req.body.username || req.body.email;
+        password = req.body.password;
+      } else {
+        // JSON format
+        email = req.body.email || req.body.username;
+        password = req.body.password;
+      }
+
+      if (!email || !password) {
+        res.status(400).json({ error: 'Email and password are required' });
+        return;
+      }
+
+      const user = await this.prisma.user.findUnique({
+        where: { email },
+      });
+
+      if (!user || !user.isActive) {
+        res.status(401).json({ error: 'Incorrect email or password' });
+        return;
+      }
+
+      const passwordValid = await bcrypt.compare(password, user.hashedPassword);
+      if (!passwordValid) {
+        res.status(401).json({ error: 'Incorrect email or password' });
+        return;
+      }
+
+      // Generate JWT token
+      const token = jwt.sign(
+        { userId: user.id, email: user.email },
+        this.config.jwtSecret!,
+        { expiresIn: '7d' }
+      );
+
+      res.json({
+        access_token: token,
+        token_type: 'bearer',
+      });
+    } catch (err) {
+      logger.error({ error: err instanceof Error ? err.message : String(err) }, 'Login failed');
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  /**
+   * POST /auth/signup
+   * Signup endpoint - creates new user
+   */
+  private async handleSignup(req: Request, res: Response): Promise<void> {
+    try {
+      const { email, password, full_name } = req.body;
+
+      if (!email || !password) {
+        res.status(400).json({ error: 'Email and password are required' });
+        return;
+      }
+
+      // Check if user already exists
+      const existingUser = await this.prisma.user.findUnique({
+        where: { email },
+      });
+
+      if (existingUser) {
+        res.status(400).json({ error: 'User with this email already exists' });
+        return;
+      }
+
+      // Hash password
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // Create user
+      const user = await this.prisma.user.create({
+        data: {
+          email,
+          hashedPassword,
+          fullName: full_name || null,
+          isActive: true,
+        },
+      });
+
+      // Generate JWT token
+      const token = jwt.sign(
+        { userId: user.id, email: user.email },
+        this.config.jwtSecret!,
+        { expiresIn: '7d' }
+      );
+
+      res.status(201).json({
+        id: user.id,
+        email: user.email,
+        fullName: user.fullName,
+        access_token: token,
+        token_type: 'bearer',
+      });
+    } catch (err) {
+      logger.error({ error: err instanceof Error ? err.message : String(err) }, 'Signup failed');
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
+  /**
+   * GET /auth/me
+   * Get current user info
+   */
+  private async handleGetMe(req: Request, res: Response): Promise<void> {
+    try {
+      const authHeader = req.headers.authorization;
+      if (!authHeader?.startsWith('Bearer ')) {
+        res.status(401).json({ error: 'Missing authorization header' });
+        return;
+      }
+
+      const token = authHeader.slice(7);
+      const decoded = jwt.verify(token, this.config.jwtSecret!) as { userId: string; email: string };
+
+      const user = await this.prisma.user.findUnique({
+        where: { id: decoded.userId },
+        select: {
+          id: true,
+          email: true,
+          fullName: true,
+          createdAt: true,
+          isActive: true,
+        },
+      });
+
+      if (!user) {
+        res.status(404).json({ error: 'User not found' });
+        return;
+      }
+
+      res.json(user);
+    } catch (err) {
+      if (err instanceof jwt.JsonWebTokenError) {
+        res.status(401).json({ error: 'Invalid token' });
+        return;
+      }
+      logger.error({ error: err instanceof Error ? err.message : String(err) }, 'Get me failed');
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+
   private handleHealth(_req: Request, res: Response): void {
     const stats = this.executor.getStats();
     const panelCount = this.panelManager.getPanelCount();
@@ -511,7 +694,27 @@ export class Server {
     try {
       const parsed = CreatePanelRequestSchema.parse(req.body);
 
-      const panel = this.panelManager.createPanel(parsed);
+      // Clean tools array to remove undefined optional properties
+      const cleanedTools = parsed.tools.map(tool => ({
+        name: tool.name,
+        handler: tool.handler,
+        trigger: tool.trigger,
+        ...(tool.description !== undefined && { description: tool.description }),
+        ...(tool.capabilities !== undefined && { capabilities: tool.capabilities }),
+      }));
+
+      // Clean undefined values for strict optional types
+      const cleanedConfig: Omit<PanelConfig, 'id'> & { id?: string } = {
+        kind: parsed.kind,
+        ...(parsed.id !== undefined && { id: parsed.id }),
+        ...(parsed.title !== undefined && { title: parsed.title }),
+        tools: cleanedTools,
+        ...(parsed.initialState !== undefined && { initialState: parsed.initialState }),
+        ...(parsed.capabilities !== undefined && { capabilities: parsed.capabilities }),
+        ...(parsed.metadata !== undefined && { metadata: parsed.metadata }),
+      };
+
+      const panel = this.panelManager.createPanel(cleanedConfig);
 
       const response: CreatePanelResponse = {
         id: panel.config.id,
@@ -542,6 +745,11 @@ export class Server {
 
   private handleGetPanel(req: Request, res: Response): void {
     const { id } = req.params;
+    if (!id) {
+      res.status(400).json({ error: 'Missing panel id parameter' });
+      return;
+    }
+
     const info = this.panelManager.getPanelInfo(id);
 
     if (!info) {
@@ -554,6 +762,11 @@ export class Server {
 
   private handleGetPanelState(req: Request, res: Response): void {
     const { id } = req.params;
+    if (!id) {
+      res.status(400).json({ error: 'Missing panel id parameter' });
+      return;
+    }
+
     const state = this.panelManager.getState(id);
 
     if (state === undefined) {
@@ -566,6 +779,11 @@ export class Server {
 
   private handleDeletePanel(req: Request, res: Response): void {
     const { id } = req.params;
+    if (!id) {
+      res.status(400).json({ error: 'Missing panel id parameter' });
+      return;
+    }
+
     const deleted = this.panelManager.destroyPanel(id);
 
     if (!deleted) {
@@ -578,6 +796,15 @@ export class Server {
 
   private async handleTrigger(req: Request, res: Response): Promise<void> {
     const { id, tool } = req.params;
+    if (!id) {
+      res.status(400).json({ error: 'Missing panel id parameter' });
+      return;
+    }
+    if (!tool) {
+      res.status(400).json({ error: 'Missing tool parameter' });
+      return;
+    }
+
     const args = req.body;
 
     const panel = this.panelManager.getPanel(id);
@@ -646,6 +873,203 @@ export class Server {
     res.status(500).json({ error: 'Internal server error' });
   }
 
+  // ===========================================================================
+  // State Engine Handlers
+  // ===========================================================================
+
+  /**
+   * GET /state/status
+   * Get State Engine status
+   */
+  private handleStateStatus(_req: Request, res: Response): void {
+    if (!this.stateEngine) {
+      res.status(503).json({ error: 'State Engine not initialized' });
+      return;
+    }
+
+    const status = this.stateEngine.getStatus();
+    res.json(status);
+  }
+
+  /**
+   * GET /state/graph
+   * Get the entire NOG graph
+   */
+  private handleGetGraph(_req: Request, res: Response): void {
+    if (!this.stateEngine) {
+      res.status(503).json({ error: 'State Engine not initialized' });
+      return;
+    }
+
+    const snapshot = this.stateEngine.getSnapshot();
+    res.json(snapshot);
+  }
+
+  /**
+   * GET /state/entities
+   * Get all entities (optionally filtered by panel or category)
+   */
+  private handleGetEntities(req: Request, res: Response): void {
+    if (!this.stateEngine) {
+      res.status(503).json({ error: 'State Engine not initialized' });
+      return;
+    }
+
+    const { panel, category } = req.query;
+
+    let entities;
+
+    if (panel && typeof panel === 'string') {
+      entities = this.stateEngine.findEntitiesByPanel(panel);
+    } else if (category && typeof category === 'string') {
+      entities = this.stateEngine.findEntitiesByCategory(category as any);
+    } else {
+      const graph = this.stateEngine.getGraph();
+      entities = Array.from(graph.entities.values());
+    }
+
+    res.json({ entities });
+  }
+
+  /**
+   * GET /state/entities/:id
+   * Get a specific entity with relationships
+   */
+  private handleGetEntity(req: Request, res: Response): void {
+    if (!this.stateEngine) {
+      res.status(503).json({ error: 'State Engine not initialized' });
+      return;
+    }
+
+    const { id } = req.params;
+    if (!id) {
+      res.status(400).json({ error: 'Missing entity id parameter' });
+      return;
+    }
+
+    const entityWithRels = this.stateEngine.getEntityWithRelationships(id);
+
+    if (!entityWithRels) {
+      res.status(404).json({ error: 'Entity not found' });
+      return;
+    }
+
+    res.json(entityWithRels);
+  }
+
+  /**
+   * POST /state/patches
+   * Apply one or more patches to the NOG
+   */
+  private async handleApplyPatch(req: Request, res: Response): Promise<void> {
+    if (!this.stateEngine) {
+      res.status(503).json({ error: 'State Engine not initialized' });
+      return;
+    }
+
+    try {
+      const { patches } = req.body;
+
+      if (!patches || !Array.isArray(patches)) {
+        res.status(400).json({ error: 'Invalid request body. Expected { patches: [] }' });
+        return;
+      }
+
+      await this.stateEngine.applyPatches(patches);
+
+      res.json({
+        success: true,
+        appliedCount: patches.length,
+      });
+    } catch (error) {
+      logger.error({ error }, 'Failed to apply patches');
+      res.status(500).json({
+        error: 'Failed to apply patches',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  /**
+   * POST /state/persist
+   * Force immediate persistence (bypass debounce)
+   */
+  private async handleForcePersist(_req: Request, res: Response): Promise<void> {
+    if (!this.stateEngine) {
+      res.status(503).json({ error: 'State Engine not initialized' });
+      return;
+    }
+
+    try {
+      await this.stateEngine.forcePersist();
+
+      res.json({
+        success: true,
+        message: 'State persisted successfully',
+      });
+    } catch (error) {
+      logger.error({ error }, 'Failed to force persist');
+      res.status(500).json({
+        error: 'Failed to persist state',
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  // ===========================================================================
+  // State Engine Lifecycle
+  // ===========================================================================
+
+  /**
+   * Initialize the State Engine
+   */
+  async initializeStateEngine(workspaceId: string, workspaceName: string, workspaceRoot: string): Promise<void> {
+    try {
+      logger.info({ workspaceId, workspaceName, workspaceRoot }, 'Initializing State Engine');
+
+      this.stateEngine = await createStateEngine({
+        workspaceId,
+        workspaceName,
+        workspaceRoot,
+        sync: {
+          debounceDelay: 1000,
+          autoCommit: true,
+        },
+      });
+
+      // Setup event listeners
+      this.stateEngine.on('graph:updated', (graph) => {
+        // Broadcast NOG updates to all connected clients
+        this.broadcastNOGUpdate();
+      });
+
+      this.stateEngine.on('sync:completed', (filesWritten, commitHash) => {
+        logger.info({ filesWritten, commitHash }, 'State Engine sync completed');
+      });
+
+      logger.info({ workspaceId }, 'State Engine initialized successfully');
+    } catch (error) {
+      logger.error({ error, workspaceId }, 'Failed to initialize State Engine');
+      throw error;
+    }
+  }
+
+  /**
+   * Broadcast NOG update to all connected clients
+   */
+  private broadcastNOGUpdate(): void {
+    if (!this.stateEngine) return;
+
+    const snapshot = this.stateEngine.getSnapshot();
+
+    for (const client of this.clients.values()) {
+      this.sendToClient(client, {
+        type: 'NOG_UPDATE',
+        snapshot,
+      });
+    }
+  }
+
   /**
    * Start the server
    */
@@ -679,6 +1103,9 @@ export class Server {
 
     // Close WebSocket server
     this.wss.close();
+
+    // Disconnect Prisma
+    await this.prisma.$disconnect();
 
     // Close HTTP server
     return new Promise((resolve, reject) => {

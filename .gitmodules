@@ -1,0 +1,3 @@
+[submodule "apps/GraphStudio"]
+	path = apps/GraphStudio
+	url = https://github.com/WorlesEnric/GraphStudio.git

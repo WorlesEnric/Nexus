@@ -3,6 +3,7 @@
  */
 
 import { z } from 'zod';
+import type { WebSocket } from 'ws';
 
 // ===== Panel Types =====
 
@@ -200,7 +201,8 @@ export type ServerMessage =
   | { type: 'EVENT'; event: EmittedEvent }
   | { type: 'PROGRESS'; suspensionId: string; status: string; data?: unknown }
   | { type: 'ERROR'; code: string; message: string }
-  | { type: 'PONG' };
+  | { type: 'PONG' }
+  | { type: 'NOG_UPDATE'; snapshot: unknown };
 
 // ===== HTTP API Types =====
 
@@ -363,5 +365,5 @@ export type Result<T, E = Error> =
   | { ok: true; value: T }
   | { ok: false; error: E };
 
-/** Async result type */
-export type AsyncResult<T, E = Error> = Promise<Result<T, E>>;
+/** Async result promise type */
+export type AsyncResultPromise<T, E = Error> = Promise<Result<T, E>>;

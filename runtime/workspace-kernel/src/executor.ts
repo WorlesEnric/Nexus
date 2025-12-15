@@ -174,7 +174,7 @@ export class WasmExecutor {
         memoryLimitBytes: this.config.memoryLimitBytes,
         timeoutMs: this.config.timeoutMs,
         maxHostCalls: this.config.maxHostCalls,
-        cacheDir: this.config.cacheDir,
+        ...(this.config.cacheDir !== undefined && { cacheDir: this.config.cacheDir }),
       });
       logger.info('WASM runtime initialized');
     } catch (err) {
@@ -293,8 +293,8 @@ export class WasmExecutor {
 
     const nativeResult: NativeAsyncResult = {
       success: result.success,
-      value: result.value !== undefined ? encodeValue(result.value) : undefined,
-      error: result.error,
+      ...(result.value !== undefined && { value: encodeValue(result.value) }),
+      ...(result.error !== undefined && { error: result.error }),
     };
 
     const executionResult = await this.runtime.resume(suspensionId, nativeResult);
@@ -398,13 +398,13 @@ export class WasmExecutor {
       result.error = {
         code: native.error.code,
         message: native.error.message,
-        location: native.error.line
-          ? {
-              line: native.error.line,
-              column: native.error.column ?? 0,
-              sourceSnippet: native.error.sourceSnippet,
-            }
-          : undefined,
+        ...(native.error.line !== undefined && {
+          location: {
+            line: native.error.line,
+            column: native.error.column ?? 0,
+            ...(native.error.sourceSnippet !== undefined && { sourceSnippet: native.error.sourceSnippet }),
+          },
+        }),
       };
     }
 
@@ -429,18 +429,22 @@ export class WasmExecutor {
       // Check for state.set calls
       const setMatches = handlerCode.matchAll(/\$state\.set\s*\(\s*['"](\w+)['"]\s*,\s*(.+?)\s*\)/g);
       for (const match of setMatches) {
-        mutations.push({ op: 'set', key: match[1], value: match[2] });
+        if (match[1] && match[2]) {
+          mutations.push({ op: 'set', key: match[1], value: match[2] });
+        }
       }
 
       // Check for emit calls
       const emitMatches = handlerCode.matchAll(/\$emit\s*\(\s*['"](\w+)['"]/g);
       for (const match of emitMatches) {
-        events.push({ name: match[1], payload: {}, timestamp: Date.now() });
+        if (match[1]) {
+          events.push({ name: match[1], payload: {}, timestamp: Date.now() });
+        }
       }
 
       // Check for return statement
       const returnMatch = handlerCode.match(/return\s+(.+?);?\s*$/m);
-      if (returnMatch) {
+      if (returnMatch && returnMatch[1]) {
         try {
           returnValue = JSON.parse(returnMatch[1]);
         } catch {
@@ -493,9 +497,7 @@ export class WasmExecutor {
       stateMutations: [],
       events: [],
       viewCommands: [],
-      error: result.error
-        ? { code: 'ASYNC_ERROR', message: result.error }
-        : undefined,
+      ...(result.error && { error: { code: 'ASYNC_ERROR', message: result.error } }),
       metrics: {
         executionTimeUs: 100,
         memoryUsedBytes: 0,

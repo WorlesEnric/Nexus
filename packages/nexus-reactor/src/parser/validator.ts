@@ -26,7 +26,7 @@ export function validateOrThrow(ast: NexusPanelAST): void {
   }
 }
 
-function validateData(data: DataAST, errors: ValidationError[], warnings: ValidationWarning[]): void {
+function validateData(data: DataAST, errors: ValidationError[], _warnings: ValidationWarning[]): void {
   const names = new Set<string>();
   for (const state of data.states) {
     if (!IDENTIFIER_PATTERN.test(state.name)) {
@@ -139,7 +139,7 @@ function validateViewNode(node: ViewNode, stateNames: Set<string>, toolNames: Se
   }
 }
 
-function validateCrossReferences(ast: NexusPanelAST, errors: ValidationError[], warnings: ValidationWarning[]): void {
+function validateCrossReferences(ast: NexusPanelAST, _errors: ValidationError[], warnings: ValidationWarning[]): void {
   const referencedStates = new Set<string>();
   const triggeredTools = new Set<string>();
   collectViewReferences(ast.view.root, referencedStates, triggeredTools);

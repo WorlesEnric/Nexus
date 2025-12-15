@@ -248,7 +248,7 @@ export function interpolateString(
     $scope?: Record<string, unknown>;
   }
 ): string {
-  return template.replace(/\{([^}]+)\}/g, (match, expr) => {
+  return template.replace(/\{([^}]+)\}/g, (_match, expr) => {
     const value = evaluateExpression(expr.trim(), context);
     return value !== undefined && value !== null ? String(value) : '';
   });

@@ -278,14 +278,14 @@ export function createEntity(
   options?: Partial<Omit<NOGEntity, 'id' | 'name' | 'category' | 'createdAt' | 'updatedAt' | 'version'>>
 ): NOGEntity {
   const now = Date.now();
-  
+
   return {
     id: generateEntityId(),
     name,
     category,
     status: options?.status ?? 'draft',
-    description: options?.description,
-    sourcePanel: options?.sourcePanel,
+    ...(options?.description !== undefined && { description: options.description }),
+    ...(options?.sourcePanel !== undefined && { sourcePanel: options.sourcePanel }),
     tags: options?.tags ?? [],
     properties: options?.properties ?? {},
     createdAt: now,

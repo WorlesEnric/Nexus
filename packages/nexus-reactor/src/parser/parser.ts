@@ -341,8 +341,41 @@ function parseViewNode(state: ParserState): ViewNode {
   const tagToken = expect(state, 'TAG_NAME');
   const tagName = tagToken.value;
   const attrs = parseAttributes(state);
-  const props: Record<string, unknown> = { ...attrs };
-  const id = props.id as string | undefined;
+
+  // Special handling for CustomComponent with bind: and on: prefixes
+  let props: Record<string, unknown>;
+  let id: string | undefined;
+
+  if (tagName === 'CustomComponent') {
+    const bindings: Record<string, string> = {};
+    const events: Record<string, string> = {};
+    const regularProps: Record<string, unknown> = {};
+
+    for (const [key, value] of Object.entries(attrs)) {
+      if (key.startsWith('bind:')) {
+        // bind:document="$state.document" -> bindings.document = "$state.document"
+        const propName = key.slice(5); // Remove 'bind:' prefix
+        bindings[propName] = value;
+      } else if (key.startsWith('on:')) {
+        // on:change="(doc) => { ... }" -> events.change = "(doc) => { ... }"
+        const eventName = key.slice(3); // Remove 'on:' prefix
+        events[eventName] = value;
+      } else {
+        regularProps[key] = value;
+      }
+    }
+
+    id = regularProps.id as string | undefined;
+    props = {
+      ...regularProps,
+      ...(Object.keys(bindings).length > 0 && { bindings }),
+      ...(Object.keys(events).length > 0 && { events }),
+    };
+  } else {
+    // Standard component handling
+    props = { ...attrs };
+    id = props.id as string | undefined;
+  }
 
   if (check(state, 'TAG_SELF_CLOSE')) {
     advance(state);

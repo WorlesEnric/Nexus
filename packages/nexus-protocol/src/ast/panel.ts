@@ -9,9 +9,9 @@
  */
 
 import type { BaseNode, ValidationResult, ValidationError } from './common';
-import type { DataAST, getStateNames } from './data';
-import type { LogicAST, getToolNames } from './logic';
-import type { ViewAST, getAllTriggers, getAllBindings, extractExpression, referencesState } from './view';
+import type { DataAST } from './data';
+import type { LogicAST } from './logic';
+import type { ViewAST } from './view';
 import { traverseViewTree } from './view';
 import { createDataAST } from './data';
 import { createLogicAST } from './logic';
@@ -156,16 +156,7 @@ export function isNexusPanelAST(node: unknown): node is NexusPanelAST {
  */
 export function validatePanelAST(ast: NexusPanelAST): ValidationResult {
   const errors: ValidationError[] = [];
-  
-  // Get all defined state names
-  const stateNames = new Set([
-    ...ast.data.states.map(s => s.name),
-    ...ast.data.computed.map(c => c.name),
-  ]);
-  
-  // Get all defined tool names
-  const toolNames = new Set(ast.logic.tools.map(t => t.name));
-  
+
   // Check for duplicate state names
   const seenStateNames = new Set<string>();
   for (const state of [...ast.data.states, ...ast.data.computed]) {
@@ -174,7 +165,7 @@ export function validatePanelAST(ast: NexusPanelAST): ValidationResult {
         code: 'DUPLICATE_STATE',
         message: `Duplicate state name: "${state.name}"`,
         path: ['data', state.name],
-        loc: state.loc,
+        ...(state.loc !== undefined && { loc: state.loc }),
       });
     }
     seenStateNames.add(state.name);
@@ -188,7 +179,7 @@ export function validatePanelAST(ast: NexusPanelAST): ValidationResult {
         code: 'DUPLICATE_TOOL',
         message: `Duplicate tool name: "${tool.name}"`,
         path: ['logic', 'tools', tool.name],
-        loc: tool.loc,
+        ...(tool.loc !== undefined && { loc: tool.loc }),
       });
     }
     seenToolNames.add(tool.name);
@@ -207,7 +198,7 @@ export function validatePanelAST(ast: NexusPanelAST): ValidationResult {
           code: 'DUPLICATE_VIEW_ID',
           message: `Duplicate view ID: "${nodeId}"`,
           path: ['view', nodeId],
-          loc: node.loc,
+          ...(node.loc !== undefined && { loc: node.loc }),
         });
       }
       seenViewIds.add(nodeId);

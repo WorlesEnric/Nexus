@@ -290,9 +290,9 @@ export function createArgNode(
     kind: 'Arg',
     name,
     type,
-    required: options?.required ?? true,
-    default: options?.default,
-    description: options?.description,
+    ...(options?.required !== undefined && { required: options.required }),
+    ...(options?.default !== undefined && { default: options.default }),
+    ...(options?.description !== undefined && { description: options.description }),
   };
 }
 
@@ -318,7 +318,7 @@ export function createToolNode(
   return {
     kind: 'Tool',
     name,
-    description: options?.description,
+    ...(options?.description !== undefined && { description: options.description }),
     args: options?.args ?? [],
     handler,
   };
@@ -348,12 +348,12 @@ export function createExtensionNode(
 ): ExtensionNode {
   // Default alias is the last segment of the name
   const defaultAlias = name.split('.').pop() ?? name;
-  
+
   return {
     kind: 'Extension',
     name,
     alias: alias ?? defaultAlias,
-    source,
+    ...(source !== undefined && { source }),
   };
 }
 

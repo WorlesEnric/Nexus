@@ -281,11 +281,11 @@ export function createEntityPatch(
     targetPanel,
     status: 'pending',
     description: options.description,
-    reasoning: options.reasoning,
+    ...(options.reasoning !== undefined && { reasoning: options.reasoning }),
     confidence: options.confidence ?? 0.8,
-    entityId: options.entityId,
-    data: options.data,
-    previousState: options.previousState,
+    ...(options.entityId !== undefined && { entityId: options.entityId }),
+    ...(options.data !== undefined && { data: options.data }),
+    ...(options.previousState !== undefined && { previousState: options.previousState }),
     createdAt: Date.now(),
   };
 }
@@ -314,11 +314,11 @@ export function createRelationshipPatch(
     targetPanel,
     status: 'pending',
     description: options.description,
-    reasoning: options.reasoning,
+    ...(options.reasoning !== undefined && { reasoning: options.reasoning }),
     confidence: options.confidence ?? 0.8,
-    relationshipId: options.relationshipId,
-    data: options.data,
-    previousState: options.previousState,
+    ...(options.relationshipId !== undefined && { relationshipId: options.relationshipId }),
+    ...(options.data !== undefined && { data: options.data }),
+    ...(options.previousState !== undefined && { previousState: options.previousState }),
     createdAt: Date.now(),
   };
 }
@@ -348,12 +348,12 @@ export function createViewPatch(
     targetPanel,
     status: 'pending',
     description: options.description,
-    reasoning: options.reasoning,
+    ...(options.reasoning !== undefined && { reasoning: options.reasoning }),
     confidence: options.confidence ?? 0.8,
     path: options.path,
     value: options.value,
-    previousValue: options.previousValue,
-    nxmlDiff: options.nxmlDiff,
+    ...(options.previousValue !== undefined && { previousValue: options.previousValue }),
+    ...(options.nxmlDiff !== undefined && { nxmlDiff: options.nxmlDiff }),
     createdAt: Date.now(),
   };
 }

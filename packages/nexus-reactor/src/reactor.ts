@@ -19,7 +19,7 @@ import { validate, validateOrThrow } from './parser/validator';
 import { createStateStore, subscribe, getSnapshot, type StateStore } from './state/store';
 import { createSandboxExecutor, createViewAPI, createEmitFunction, createLogFunction, type SandboxExecutor } from './sandbox/executor';
 import { processLayout } from './layout/engine';
-import { createViewRegistry, getViewHandle, type ViewRegistry } from './view/registry';
+import { createViewRegistry, type ViewRegistry } from './view/registry';
 import { createPanelComponent } from './view/hydrator';
 import { createMCPBridge, type MCPBridge } from './mcp/bridge';
 import { createDebugger, setDebugMode } from './utils/debug';

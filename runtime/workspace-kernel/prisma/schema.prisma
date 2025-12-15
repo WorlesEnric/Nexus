@@ -1,0 +1,123 @@
+// Nexus Marketplace Database Schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"  // Use SQLite for development, can switch to PostgreSQL for production
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String   @id @default(uuid())
+  email          String   @unique
+  hashedPassword String
+  fullName       String?
+  createdAt      DateTime @default(now())
+  isActive       Boolean  @default(true)
+
+  // Relations
+  publishedPanels Panel[]
+  installations   Installation[]
+  reviews         Review[]
+
+  @@map("users")
+}
+
+model Panel {
+  id          String   @id @default(uuid())
+  name        String
+  description String
+  category    String   // 'creation', 'data', 'ai', 'utility', 'preview'
+  icon        String   // Lucide icon name
+  accentColor String
+
+  // Source
+  nxmlSource          String  // Full NXML content
+  hasCustomComponents Boolean @default(false)
+
+  // Publishing
+  authorId   String
+  author     User    @relation(fields: [authorId], references: [id])
+  visibility String  @default("draft") // 'draft', 'published', 'unlisted', 'deprecated'
+  type       String  // 'nexus', 'free', 'paid'
+  price      Float?  // For paid panels
+
+  // Metadata
+  tags      String
+  version   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Stats
+  installCount  Int   @default(0)
+  averageRating Float?
+
+  // Relations
+  versions         PanelVersion[]
+  installations    Installation[]
+  reviews          Review[]
+  customComponents CustomComponent[]
+
+  @@map("panels")
+}
+
+model PanelVersion {
+  id      String @id @default(uuid())
+  panelId String
+  panel   Panel  @relation(fields: [panelId], references: [id], onDelete: Cascade)
+
+  version    String
+  nxmlSource String // Full NXML content
+  changelog  String?
+  createdAt  DateTime @default(now())
+
+  @@unique([panelId, version])
+  @@map("panel_versions")
+}
+
+model CustomComponent {
+  id      String @id @default(uuid())
+  panelId String
+  panel   Panel  @relation(fields: [panelId], references: [id], onDelete: Cascade)
+
+  name      String  // Component name
+  module    String  // npm package or local path
+  bundleUrl String? // CDN URL for component bundle
+
+  createdAt DateTime @default(now())
+
+  @@map("custom_components")
+}
+
+model Installation {
+  id      String @id @default(uuid())
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  panelId String
+  panel   Panel  @relation(fields: [panelId], references: [id], onDelete: Cascade)
+
+  installedAt DateTime @default(now())
+  version     String
+  isActive    Boolean  @default(true)
+
+  @@unique([userId, panelId])
+  @@map("installations")
+}
+
+model Review {
+  id      String @id @default(uuid())
+  userId  String
+  user    User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  panelId String
+  panel   Panel  @relation(fields: [panelId], references: [id], onDelete: Cascade)
+
+  rating    Int      // 1-5 stars
+  comment   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, panelId])
+  @@map("reviews")
+}
