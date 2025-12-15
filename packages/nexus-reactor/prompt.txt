@@ -1,0 +1,4876 @@
+Project Path: nexus-reactor
+
+Source Tree:
+
+```txt
+nexus-reactor
+├── PROJECT_STRUCTURE.md
+├── package.json
+├── src
+│   ├── components
+│   │   ├── Button.tsx
+│   │   ├── Chart.tsx
+│   │   ├── Container.tsx
+│   │   ├── If.tsx
+│   │   ├── Input.tsx
+│   │   ├── Iterate.tsx
+│   │   ├── Layout.tsx
+│   │   ├── LogStream.tsx
+│   │   ├── Metric.tsx
+│   │   ├── StatusBadge.tsx
+│   │   ├── Switch.tsx
+│   │   ├── Text.tsx
+│   │   └── index.ts
+│   ├── core
+│   │   ├── constants.ts
+│   │   ├── errors.ts
+│   │   ├── events.ts
+│   │   ├── index.ts
+│   │   └── types.ts
+│   ├── index.ts
+│   ├── layout
+│   │   ├── engine.ts
+│   │   ├── grid.ts
+│   │   ├── index.ts
+│   │   └── weights.ts
+│   ├── mcp
+│   │   ├── bridge.ts
+│   │   ├── index.ts
+│   │   ├── resources.ts
+│   │   └── tools.ts
+│   ├── parser
+│   │   ├── index.ts
+│   │   ├── lexer.ts
+│   │   ├── parser.ts
+│   │   └── validator.ts
+│   ├── sandbox
+│   │   ├── context.ts
+│   │   ├── executor.ts
+│   │   ├── globals.ts
+│   │   └── index.ts
+│   ├── state
+│   │   ├── computed.ts
+│   │   ├── index.ts
+│   │   ├── proxy.ts
+│   │   ├── store.ts
+│   │   └── subscriber.ts
+│   ├── utils
+│   │   ├── coercion.ts
+│   │   ├── debug.ts
+│   │   ├── expression.ts
+│   │   └── index.ts
+│   └── view
+│       ├── bindings.ts
+│       ├── hydrator.ts
+│       ├── index.ts
+│       ├── registry.ts
+│       └── scope.ts
+├── test
+│   ├── App.tsx
+│   ├── index.html
+│   └── main.tsx
+├── tsconfig.json
+└── vite.config.ts
+
+```
+
+`nexus-reactor/src/core/constants.ts`:
+
+```ts
+/**
+ * @nexus/reactor - Constants
+ * 
+ * Configuration constants for the Nexus Reactor runtime.
+ */
+
+import type { ColumnSpan } from './types';
+
+// ============================================================================
+// Layout Constants
+// ============================================================================
+
+/**
+ * Total columns in the grid system
+ */
+export const GRID_COLUMNS = 12;
+
+/**
+ * Component weights for auto-layout (12-column grid)
+ * Determines default column span for each component type
+ */
+export const COMPONENT_WEIGHTS: Record<string, ColumnSpan> = {
+  // Small components (4 per row)
+  Metric: 3,
+  StatusBadge: 3,
+  Switch: 3,
+  Button: 3,
+  Action: 3,
+  
+  // Medium components (2 per row)
+  Chart: 6,
+  Input: 6,
+  
+  // Full-width components (1 per row)
+  LogStream: 12,
+  Text: 12,
+  Container: 12,
+  Layout: 12,
+  
+  // Control flow (inherit from children)
+  If: 12,
+  Iterate: 12,
+  
+  // Default for unknown components
+  default: 6,
+};
+
+/**
+ * Get the weight (column span) for a component type
+ */
+export function getComponentWeight(componentType: string): ColumnSpan {
+  return COMPONENT_WEIGHTS[componentType] ?? COMPONENT_WEIGHTS['default'] ?? 6;
+}
+
+/**
+ * Gap size mappings to CSS values
+ */
+export const GAP_SIZES: Record<string, string> = {
+  sm: '0.5rem',
+  md: '1rem',
+  lg: '1.5rem',
+};
+
+// ============================================================================
+// Sandbox Constants
+// ============================================================================
+
+/**
+ * Globals that must be shadowed (set to undefined) in the sandbox
+ */
+export const FORBIDDEN_GLOBALS = [
+  'window',
+  'document',
+  'globalThis',
+  'self',
+  'frames',
+  'parent',
+  'top',
+  'fetch',
+  'XMLHttpRequest',
+  'WebSocket',
+  'Worker',
+  'SharedWorker',
+  'ServiceWorker',
+  'eval',
+  'Function',
+  'importScripts',
+  'localStorage',
+  'sessionStorage',
+  'indexedDB',
+  'caches',
+  'cookieStore',
+  'navigator',
+  'location',
+  'history',
+  'alert',
+  'confirm',
+  'prompt',
+  'open',
+  'close',
+  'print',
+  'postMessage',
+  'addEventListener',
+  'removeEventListener',
+  'dispatchEvent',
+  'setTimeout',
+  'setInterval',
+  'requestAnimationFrame',
+  'cancelAnimationFrame',
+  'queueMicrotask',
+  'crypto',
+  'performance',
+];
+
+/**
+ * Maximum execution time for synchronous handlers (ms)
+ */
+export const HANDLER_TIMEOUT_MS = 500;
+
+/**
+ * Maximum recursion depth for reactive updates
+ */
+export const MAX_RECURSION_DEPTH = 50;
+
+/**
+ * Maximum number of state updates per tick
+ */
+export const MAX_UPDATES_PER_TICK = 1000;
+
+// ============================================================================
+// Parser Constants
+// ============================================================================
+
+/**
+ * Valid identifier pattern (JavaScript identifier rules)
+ */
+export const IDENTIFIER_PATTERN = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;
+
+/**
+ * Binding expression pattern: {expression}
+ */
+export const BINDING_PATTERN = /^\{(.+)\}$/;
+
+/**
+ * State reference pattern in expressions
+ */
+export const STATE_REF_PATTERN = /\$state\.([a-zA-Z_$][a-zA-Z0-9_$]*)/g;
+
+/**
+ * Scope reference pattern in expressions
+ */
+export const SCOPE_REF_PATTERN = /\$scope\.([a-zA-Z_$][a-zA-Z0-9_$\.]*)/g;
+
+/**
+ * Extension usage pattern in handler code
+ */
+export const EXT_USAGE_PATTERN = /\$ext\.([a-zA-Z_$][a-zA-Z0-9_$]*)/g;
+
+/**
+ * Extension name format pattern
+ */
+export const EXTENSION_NAME_PATTERN = /^[a-zA-Z][a-zA-Z0-9]*(\.[a-zA-Z][a-zA-Z0-9]*)*$/;
+
+// ============================================================================
+// View Constants
+// ============================================================================
+
+/**
+ * Components that are considered "control flow" (don't render themselves)
+ */
+export const CONTROL_FLOW_COMPONENTS = ['If', 'Iterate'];
+
+/**
+ * Components that are "structural" (layout containers)
+ */
+export const STRUCTURAL_COMPONENTS = ['Layout', 'Container'];
+
+/**
+ * Standard Component Library (SCL) component types
+ */
+export const SCL_COMPONENTS = [
+  'Layout',
+  'Container',
+  'If',
+  'Iterate',
+  'Text',
+  'Metric',
+  'StatusBadge',
+  'LogStream',
+  'Chart',
+  'Input',
+  'Button',
+  'Action',
+  'Switch',
+];
+
+// ============================================================================
+// Event Constants
+// ============================================================================
+
+/**
+ * Built-in emit events
+ */
+export const EMIT_EVENTS = {
+  TOAST: 'toast',
+  MODAL: 'modal',
+  NAVIGATE: 'navigate',
+  ERROR: 'system:error',
+  LOG: 'system:log',
+} as const;
+
+// ============================================================================
+// Validation Constants
+// ============================================================================
+
+/**
+ * Error codes for validation
+ */
+export const ERROR_CODES = {
+  // Syntax errors
+  PARSE_ERROR: 'PARSE_ERROR',
+  INVALID_XML: 'INVALID_XML',
+  
+  // Schema errors
+  INVALID_IDENTIFIER: 'INVALID_IDENTIFIER',
+  INVALID_TYPE: 'INVALID_TYPE',
+  MISSING_REQUIRED: 'MISSING_REQUIRED',
+  
+  // Uniqueness errors
+  DUPLICATE_STATE: 'DUPLICATE_STATE',
+  DUPLICATE_TOOL: 'DUPLICATE_TOOL',
+  DUPLICATE_VIEW_ID: 'DUPLICATE_VIEW_ID',
+  DUPLICATE_EXTENSION_ALIAS: 'DUPLICATE_EXTENSION_ALIAS',
+  DUPLICATE_LIFECYCLE: 'DUPLICATE_LIFECYCLE',
+  
+  // Reference errors
+  UNDEFINED_STATE_REFERENCE: 'UNDEFINED_STATE_REFERENCE',
+  UNDEFINED_TOOL_REFERENCE: 'UNDEFINED_TOOL_REFERENCE',
+  INVALID_SCOPE_REFERENCE: 'INVALID_SCOPE_REFERENCE',
+  UNDECLARED_EXTENSION: 'UNDECLARED_EXTENSION',
+  
+  // Security errors
+  FORBIDDEN_GLOBAL: 'FORBIDDEN_GLOBAL',
+  
+  // Runtime errors
+  TIMEOUT: 'TIMEOUT',
+  RECURSION_LIMIT: 'RECURSION_LIMIT',
+  SANDBOX_ERROR: 'SANDBOX_ERROR',
+} as const;
+
+/**
+ * Warning codes for validation
+ */
+export const WARNING_CODES = {
+  UNUSED_STATE: 'UNUSED_STATE',
+  UNUSED_TOOL: 'UNUSED_TOOL',
+  NO_MOUNT_WITH_EXTENSIONS: 'NO_MOUNT_WITH_EXTENSIONS',
+} as const;
+
+// ============================================================================
+// Type Coercion Constants
+// ============================================================================
+
+/**
+ * Default values for each NXML primitive type
+ */
+export const DEFAULT_VALUES: Record<string, unknown> = {
+  string: '',
+  number: 0,
+  boolean: false,
+  list: [],
+  object: {},
+};
+
+/**
+ * Truthy string values for boolean coercion
+ */
+export const TRUTHY_STRINGS = ['true', 'yes', '1', 'on'];
+
+/**
+ * Falsy string values for boolean coercion
+ */
+export const FALSY_STRINGS = ['false', 'no', '0', 'off', ''];
+```
+
+`nexus-reactor/src/core/errors.ts`:
+
+```ts
+/**
+ * @nexus/reactor - Error Classes
+ * 
+ * Custom error classes for different failure modes in the Reactor.
+ */
+
+import type { SourceLocation } from './types';
+import { ERROR_CODES } from './constants';
+
+/**
+ * Base class for all Nexus Reactor errors
+ */
+export class NexusError extends Error {
+  public readonly code: string;
+  public readonly path?: string[];
+  public readonly loc?: SourceLocation;
+  public readonly details?: Record<string, unknown>;
+
+  constructor(
+    code: string,
+    message: string,
+    options?: {
+      path?: string[];
+      loc?: SourceLocation;
+      details?: Record<string, unknown>;
+      cause?: Error;
+    }
+  ) {
+    super(message);
+    this.name = 'NexusError';
+    this.code = code;
+    this.path = options?.path;
+    this.loc = options?.loc;
+    this.details = options?.details;
+    
+    if (options?.cause) {
+      this.cause = options.cause;
+    }
+
+    // Maintains proper stack trace for where error was thrown
+    if (Error.captureStackTrace) {
+      Error.captureStackTrace(this, this.constructor);
+    }
+  }
+
+  /**
+   * Format error for display
+   */
+  toString(): string {
+    let str = `[${this.code}] ${this.message}`;
+    
+    if (this.path?.length) {
+      str += `\n  Path: ${this.path.join(' > ')}`;
+    }
+    
+    if (this.loc) {
+      str += `\n  Location: line ${this.loc.startLine}, column ${this.loc.startColumn}`;
+    }
+    
+    return str;
+  }
+
+  /**
+   * Convert to plain object for serialization
+   */
+  toJSON(): Record<string, unknown> {
+    return {
+      name: this.name,
+      code: this.code,
+      message: this.message,
+      path: this.path,
+      loc: this.loc,
+      details: this.details,
+    };
+  }
+}
+
+/**
+ * Error thrown during NXML parsing
+ */
+export class ParseError extends NexusError {
+  constructor(
+    message: string,
+    options?: {
+      loc?: SourceLocation;
+      details?: Record<string, unknown>;
+      cause?: Error;
+    }
+  ) {
+    super(ERROR_CODES.PARSE_ERROR, message, {
+      ...options,
+      path: ['parser'],
+    });
+    this.name = 'ParseError';
+  }
+
+  static invalidXML(reason: string, loc?: SourceLocation): ParseError {
+    return new ParseError(`Invalid XML: ${reason}`, { loc });
+  }
+
+  static unexpectedToken(token: string, expected: string, loc?: SourceLocation): ParseError {
+    return new ParseError(`Unexpected token "${token}", expected ${expected}`, { loc });
+  }
+
+  static unclosedTag(tagName: string, loc?: SourceLocation): ParseError {
+    return new ParseError(`Unclosed tag: <${tagName}>`, { loc });
+  }
+}
+
+/**
+ * Error thrown during AST validation
+ */
+export class ValidationError extends NexusError {
+  public readonly severity: 'error' | 'warning';
+
+  constructor(
+    code: string,
+    message: string,
+    options?: {
+      path?: string[];
+      loc?: SourceLocation;
+      severity?: 'error' | 'warning';
+      details?: Record<string, unknown>;
+    }
+  ) {
+    super(code, message, options);
+    this.name = 'ValidationError';
+    this.severity = options?.severity ?? 'error';
+  }
+
+  static duplicateState(name: string, path?: string[]): ValidationError {
+    return new ValidationError(
+      ERROR_CODES.DUPLICATE_STATE,
+      `Duplicate state/computed name: "${name}"`,
+      { path }
+    );
+  }
+
+  static duplicateTool(name: string, path?: string[]): ValidationError {
+    return new ValidationError(
+      ERROR_CODES.DUPLICATE_TOOL,
+      `Duplicate tool name: "${name}"`,
+      { path }
+    );
+  }
+
+  static duplicateViewId(id: string, path?: string[]): ValidationError {
+    return new ValidationError(
+      ERROR_CODES.DUPLICATE_VIEW_ID,
+      `Duplicate view id: "${id}"`,
+      { path }
+    );
+  }
+
+  static undefinedStateRef(name: string, path?: string[]): ValidationError {
+    return new ValidationError(
+      ERROR_CODES.UNDEFINED_STATE_REFERENCE,
+      `Reference to undefined state: "${name}"`,
+      { path }
+    );
+  }
+
+  static undefinedToolRef(name: string, path?: string[]): ValidationError {
+    return new ValidationError(
+      ERROR_CODES.UNDEFINED_TOOL_REFERENCE,
+      `Reference to undefined tool: "${name}"`,
+      { path }
+    );
+  }
+
+  static invalidIdentifier(name: string, path?: string[]): ValidationError {
+    return new ValidationError(
+      ERROR_CODES.INVALID_IDENTIFIER,
+      `Invalid identifier: "${name}"`,
+      { path }
+    );
+  }
+
+  static forbiddenGlobal(name: string, path?: string[]): ValidationError {
+    return new ValidationError(
+      ERROR_CODES.FORBIDDEN_GLOBAL,
+      `Handler code contains forbidden global: "${name}"`,
+      { path }
+    );
+  }
+
+  static invalidScopeReference(path?: string[]): ValidationError {
+    return new ValidationError(
+      ERROR_CODES.INVALID_SCOPE_REFERENCE,
+      `$scope reference used outside of <Iterate> context`,
+      { path }
+    );
+  }
+
+  static undeclaredExtension(alias: string, path?: string[]): ValidationError {
+    return new ValidationError(
+      ERROR_CODES.UNDECLARED_EXTENSION,
+      `Usage of undeclared extension: "$ext.${alias}"`,
+      { path }
+    );
+  }
+}
+
+/**
+ * Error thrown during sandbox execution
+ */
+export class SandboxError extends NexusError {
+  public readonly toolName?: string;
+  public readonly handlerCode?: string;
+
+  constructor(
+    message: string,
+    options?: {
+      toolName?: string;
+      handlerCode?: string;
+      cause?: Error;
+      details?: Record<string, unknown>;
+    }
+  ) {
+    super(ERROR_CODES.SANDBOX_ERROR, message, {
+      path: options?.toolName ? ['sandbox', options.toolName] : ['sandbox'],
+      details: options?.details,
+      cause: options?.cause,
+    });
+    this.name = 'SandboxError';
+    this.toolName = options?.toolName;
+    this.handlerCode = options?.handlerCode;
+  }
+
+  static timeout(toolName: string, timeoutMs: number): SandboxError {
+    return new SandboxError(
+      `Handler execution timed out after ${timeoutMs}ms`,
+      { toolName }
+    );
+  }
+
+  static recursionLimit(depth: number): SandboxError {
+    return new SandboxError(
+      `Maximum recursion depth (${depth}) exceeded - possible infinite loop`,
+      { details: { depth } }
+    );
+  }
+
+  static executionError(toolName: string, error: Error): SandboxError {
+    return new SandboxError(
+      `Error executing handler: ${error.message}`,
+      { toolName, cause: error }
+    );
+  }
+}
+
+/**
+ * Error thrown when state operations fail
+ */
+export class StateError extends NexusError {
+  constructor(
+    message: string,
+    options?: {
+      path?: string[];
+      details?: Record<string, unknown>;
+      cause?: Error;
+    }
+  ) {
+    super('STATE_ERROR', message, options);
+    this.name = 'StateError';
+  }
+
+  static typeMismatch(
+    key: string,
+    expected: string,
+    received: string
+  ): StateError {
+    return new StateError(
+      `Type mismatch for "${key}": expected ${expected}, received ${received}`,
+      { path: ['state', key], details: { expected, received } }
+    );
+  }
+
+  static undefinedState(key: string): StateError {
+    return new StateError(
+      `Attempt to access undefined state: "${key}"`,
+      { path: ['state', key] }
+    );
+  }
+
+  static readOnlyComputed(key: string): StateError {
+    return new StateError(
+      `Cannot write to computed value: "${key}"`,
+      { path: ['computed', key] }
+    );
+  }
+}
+
+/**
+ * Error thrown during view operations
+ */
+export class ViewError extends NexusError {
+  constructor(
+    message: string,
+    options?: {
+      path?: string[];
+      details?: Record<string, unknown>;
+      cause?: Error;
+    }
+  ) {
+    super('VIEW_ERROR', message, options);
+    this.name = 'ViewError';
+  }
+
+  static componentNotFound(id: string): ViewError {
+    return new ViewError(
+      `Component with id "${id}" not found in ViewRegistry`,
+      { path: ['view', id] }
+    );
+  }
+
+  static invalidMethod(componentId: string, method: string): ViewError {
+    return new ViewError(
+      `Component "${componentId}" does not support method "${method}"`,
+      { path: ['view', componentId] }
+    );
+  }
+}
+
+/**
+ * Aggregate error for collecting multiple validation errors
+ */
+export class AggregateValidationError extends Error {
+  public readonly errors: ValidationError[];
+  public readonly warnings: ValidationError[];
+
+  constructor(errors: ValidationError[], warnings: ValidationError[] = []) {
+    const errorCount = errors.length;
+    const warningCount = warnings.length;
+    super(
+      `Validation failed with ${errorCount} error(s) and ${warningCount} warning(s)`
+    );
+    this.name = 'AggregateValidationError';
+    this.errors = errors;
+    this.warnings = warnings;
+  }
+
+  /**
+   * Check if validation passed (no errors, warnings allowed)
+   */
+  get isValid(): boolean {
+    return this.errors.length === 0;
+  }
+
+  /**
+   * Get all issues (errors + warnings)
+   */
+  get allIssues(): ValidationError[] {
+    return [...this.errors, ...this.warnings];
+  }
+
+  toString(): string {
+    const lines = [this.message];
+    
+    if (this.errors.length > 0) {
+      lines.push('\nErrors:');
+      this.errors.forEach((e, i) => {
+        lines.push(`  ${i + 1}. ${e.toString()}`);
+      });
+    }
+    
+    if (this.warnings.length > 0) {
+      lines.push('\nWarnings:');
+      this.warnings.forEach((w, i) => {
+        lines.push(`  ${i + 1}. ${w.toString()}`);
+      });
+    }
+    
+    return lines.join('\n');
+  }
+}
+```
+
+`nexus-reactor/src/core/events.ts`:
+
+```ts
+/**
+ * @nexus/reactor - Event System
+ * 
+ * Internal event emitter for reactor lifecycle and state events.
+ */
+
+import type { ReactorEventType, ReactorEvent, ReactorEventHandler } from './types';
+
+/**
+ * Type-safe event emitter for Reactor events
+ */
+export class ReactorEventEmitter {
+  private handlers: Map<ReactorEventType, Set<ReactorEventHandler>>;
+  private allHandlers: Set<ReactorEventHandler>;
+
+  constructor() {
+    this.handlers = new Map();
+    this.allHandlers = new Set();
+  }
+
+  /**
+   * Subscribe to a specific event type
+   */
+  on(type: ReactorEventType, handler: ReactorEventHandler): () => void {
+    if (!this.handlers.has(type)) {
+      this.handlers.set(type, new Set());
+    }
+    this.handlers.get(type)!.add(handler);
+
+    // Return unsubscribe function
+    return () => {
+      this.handlers.get(type)?.delete(handler);
+    };
+  }
+
+  /**
+   * Subscribe to all events
+   */
+  onAll(handler: ReactorEventHandler): () => void {
+    this.allHandlers.add(handler);
+    return () => {
+      this.allHandlers.delete(handler);
+    };
+  }
+
+  /**
+   * Subscribe to an event once
+   */
+  once(type: ReactorEventType, handler: ReactorEventHandler): () => void {
+    const wrapper: ReactorEventHandler = (event) => {
+      handler(event);
+      this.off(type, wrapper);
+    };
+    return this.on(type, wrapper);
+  }
+
+  /**
+   * Unsubscribe from a specific event type
+   */
+  off(type: ReactorEventType, handler: ReactorEventHandler): void {
+    this.handlers.get(type)?.delete(handler);
+  }
+
+  /**
+   * Emit an event
+   */
+  emit(type: ReactorEventType, payload?: unknown): void {
+    const event: ReactorEvent = {
+      type,
+      payload,
+      timestamp: Date.now(),
+    };
+
+    // Notify type-specific handlers
+    const typeHandlers = this.handlers.get(type);
+    if (typeHandlers) {
+      for (const handler of typeHandlers) {
+        try {
+          handler(event);
+        } catch (error) {
+          console.error(`Error in event handler for "${type}":`, error);
+        }
+      }
+    }
+
+    // Notify global handlers
+    for (const handler of this.allHandlers) {
+      try {
+        handler(event);
+      } catch (error) {
+        console.error(`Error in global event handler:`, error);
+      }
+    }
+  }
+
+  /**
+   * Remove all handlers for a specific event type
+   */
+  removeAllListeners(type?: ReactorEventType): void {
+    if (type) {
+      this.handlers.delete(type);
+    } else {
+      this.handlers.clear();
+      this.allHandlers.clear();
+    }
+  }
+
+  /**
+   * Get the number of listeners for an event type
+   */
+  listenerCount(type: ReactorEventType): number {
+    return (this.handlers.get(type)?.size ?? 0) + this.allHandlers.size;
+  }
+
+  /**
+   * Check if there are any listeners for an event type
+   */
+  hasListeners(type: ReactorEventType): boolean {
+    return this.listenerCount(type) > 0;
+  }
+}
+
+/**
+ * Log stream for panel debugging
+ */
+export class LogStream {
+  private logs: LogEntry[];
+  private maxEntries: number;
+  private listeners: Set<(entry: LogEntry) => void>;
+
+  constructor(maxEntries = 1000) {
+    this.logs = [];
+    this.maxEntries = maxEntries;
+    this.listeners = new Set();
+  }
+
+  /**
+   * Add a log entry
+   */
+  log(level: LogLevel, message: string, data?: unknown): void {
+    const entry: LogEntry = {
+      id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      timestamp: Date.now(),
+      level,
+      message,
+      data,
+    };
+
+    this.logs.push(entry);
+
+    // Trim if over max
+    if (this.logs.length > this.maxEntries) {
+      this.logs = this.logs.slice(-this.maxEntries);
+    }
+
+    // Notify listeners
+    for (const listener of this.listeners) {
+      try {
+        listener(entry);
+      } catch (error) {
+        console.error('Error in log listener:', error);
+      }
+    }
+  }
+
+  /**
+   * Convenience methods for different log levels
+   */
+  debug(message: string, data?: unknown): void {
+    this.log('debug', message, data);
+  }
+
+  info(message: string, data?: unknown): void {
+    this.log('info', message, data);
+  }
+
+  warn(message: string, data?: unknown): void {
+    this.log('warn', message, data);
+  }
+
+  error(message: string, data?: unknown): void {
+    this.log('error', message, data);
+  }
+
+  /**
+   * Subscribe to new log entries
+   */
+  subscribe(listener: (entry: LogEntry) => void): () => void {
+    this.listeners.add(listener);
+    return () => {
+      this.listeners.delete(listener);
+    };
+  }
+
+  /**
+   * Get all log entries
+   */
+  getAll(): LogEntry[] {
+    return [...this.logs];
+  }
+
+  /**
+   * Get entries filtered by level
+   */
+  getByLevel(level: LogLevel): LogEntry[] {
+    return this.logs.filter((entry) => entry.level === level);
+  }
+
+  /**
+   * Get entries since a timestamp
+   */
+  getSince(timestamp: number): LogEntry[] {
+    return this.logs.filter((entry) => entry.timestamp >= timestamp);
+  }
+
+  /**
+   * Clear all logs
+   */
+  clear(): void {
+    this.logs = [];
+  }
+
+  /**
+   * Get the latest N entries
+   */
+  getLatest(count: number): LogEntry[] {
+    return this.logs.slice(-count);
+  }
+}
+
+/**
+ * Log entry structure
+ */
+export interface LogEntry {
+  id: string;
+  timestamp: number;
+  level: LogLevel;
+  message: string;
+  data?: unknown;
+}
+
+/**
+ * Log levels
+ */
+export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
+
+/**
+ * Create a scoped event emitter for a specific panel
+ */
+export function createPanelEventEmitter(panelId: string): PanelEventEmitter {
+  return new PanelEventEmitter(panelId);
+}
+
+/**
+ * Panel-scoped event emitter with automatic event prefixing
+ */
+export class PanelEventEmitter extends ReactorEventEmitter {
+  constructor(public readonly panelId: string) {
+    super();
+  }
+
+  /**
+   * Emit with panel context
+   */
+  emitWithContext(type: ReactorEventType, payload?: unknown): void {
+    this.emit(type, {
+      panelId: this.panelId,
+      data: payload,
+    });
+  }
+}
+
+/**
+ * Shared event bus for cross-panel communication
+ */
+export const globalEventBus = new ReactorEventEmitter();
+```
+
+`nexus-reactor/src/core/index.ts`:
+
+```ts
+/**
+ * @nexus/reactor - Core Module
+ * 
+ * Exports all core types, constants, errors, and events.
+ */
+
+export * from './types';
+export * from './constants';
+export * from './errors';
+export * from './events';
+```
+
+`nexus-reactor/src/core/types.ts`:
+
+```ts
+/**
+ * @nexus/reactor - Core Type Definitions
+ * 
+ * This file defines the foundational types used throughout the Nexus Reactor.
+ * It mirrors and extends types from @nexus/protocol for runtime use.
+ */
+
+// ============================================================================
+// Primitive Types
+// ============================================================================
+
+/**
+ * Supported primitive types in NXML state definitions
+ */
+export type NXMLPrimitiveType = 'string' | 'number' | 'boolean' | 'list' | 'object';
+
+/**
+ * JavaScript identifier pattern for variable names
+ */
+export type Identifier = string;
+
+/**
+ * Expression string that will be evaluated at runtime
+ */
+export type Expression = string;
+
+/**
+ * Binding expression with interpolation syntax: "{$state.x}" or "{$scope.item}"
+ */
+export type BindingExpression = string;
+
+/**
+ * Handler code block that runs in the sandbox
+ */
+export type HandlerCode = string;
+
+/**
+ * Runtime value that can be stored in state
+ */
+export type RuntimeValue =
+  | string
+  | number
+  | boolean
+  | RuntimeValue[]
+  | { [key: string]: RuntimeValue }
+  | null
+  | undefined;
+
+// ============================================================================
+// Layout Types
+// ============================================================================
+
+/**
+ * Layout strategy determines how children are arranged
+ */
+export type LayoutStrategy = 'auto' | 'stack' | 'row';
+
+/**
+ * Gap sizing options
+ */
+export type GapSize = 'sm' | 'md' | 'lg';
+
+/**
+ * Alignment options for flex layouts
+ */
+export type Alignment = 'start' | 'center' | 'end' | 'stretch';
+
+/**
+ * Column span for 12-column grid (1-12)
+ */
+export type ColumnSpan = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
+
+/**
+ * Layout information injected by the Layout Engine
+ */
+export interface LayoutInfo {
+  colSpan: ColumnSpan;
+  className: string;
+  newRow?: boolean;
+}
+
+// ============================================================================
+// Component Types
+// ============================================================================
+
+export type TextVariant = 'h1' | 'h2' | 'h3' | 'h4' | 'body' | 'code' | 'caption';
+export type ButtonVariant = 'primary' | 'secondary' | 'danger' | 'ghost';
+export type StatusType = 'success' | 'warn' | 'error' | 'info';
+export type ChartType = 'line' | 'bar' | 'pie' | 'area';
+export type ContainerVariant = 'card' | 'panel' | 'section' | 'transparent';
+export type InputType = 'text' | 'number' | 'password' | 'email';
+
+// ============================================================================
+// AST Node Types (Simplified for Runtime)
+// ============================================================================
+
+/**
+ * Source location for error reporting
+ */
+export interface SourceLocation {
+  startLine: number;
+  startColumn: number;
+  endLine: number;
+  endColumn: number;
+}
+
+/**
+ * Base interface for all AST nodes
+ */
+export interface BaseNode {
+  loc?: SourceLocation;
+}
+
+/**
+ * Lifecycle event types
+ */
+export type LifecycleEvent = 'mount' | 'unmount';
+
+// ---- Data Namespace ----
+
+export interface StateNode extends BaseNode {
+  readonly kind: 'State';
+  name: Identifier;
+  type: NXMLPrimitiveType;
+  default?: RuntimeValue;
+}
+
+export interface ComputedNode extends BaseNode {
+  readonly kind: 'Computed';
+  name: Identifier;
+  value: Expression;
+}
+
+export type DataNode = StateNode | ComputedNode;
+
+export interface DataAST extends BaseNode {
+  readonly kind: 'Data';
+  states: StateNode[];
+  computed: ComputedNode[];
+}
+
+// ---- Logic Namespace ----
+
+export interface ArgNode extends BaseNode {
+  readonly kind: 'Arg';
+  name: Identifier;
+  type: NXMLPrimitiveType;
+  required?: boolean;
+  default?: unknown;
+  description?: string;
+}
+
+export interface HandlerNode extends BaseNode {
+  readonly kind: 'Handler';
+  code: HandlerCode;
+  isAsync?: boolean;
+}
+
+export interface ToolNode extends BaseNode {
+  readonly kind: 'Tool';
+  name: Identifier;
+  description?: string;
+  args: ArgNode[];
+  handler: HandlerNode;
+}
+
+export interface LifecycleNode extends BaseNode {
+  readonly kind: 'Lifecycle';
+  on: LifecycleEvent;
+  handler: HandlerNode;
+}
+
+export interface ExtensionNode extends BaseNode {
+  readonly kind: 'Extension';
+  name: string;
+  alias: Identifier;
+  source?: string;
+}
+
+export type LogicNode = ToolNode | LifecycleNode | ExtensionNode;
+
+export interface LogicAST extends BaseNode {
+  readonly kind: 'Logic';
+  extensions: ExtensionNode[];
+  tools: ToolNode[];
+  lifecycles: LifecycleNode[];
+}
+
+// ---- View Namespace ----
+
+export interface ViewNode extends BaseNode {
+  type: string;
+  id?: string;
+  props: Record<string, unknown>;
+  children: ViewNode[];
+  layout?: LayoutInfo;
+}
+
+export interface ViewAST extends BaseNode {
+  readonly kind: 'View';
+  root: ViewNode;
+}
+
+// ---- Panel Root ----
+
+export interface PanelMeta {
+  title: string;
+  description?: string;
+  id?: string;
+  version?: string;
+  author?: string;
+  tags?: string[];
+}
+
+export interface NexusPanelAST extends BaseNode {
+  readonly kind: 'NexusPanel';
+  meta: PanelMeta;
+  data: DataAST;
+  logic: LogicAST;
+  view: ViewAST;
+}
+
+// ============================================================================
+// Reactor Configuration Types
+// ============================================================================
+
+/**
+ * Configuration for initializing a NexusReactor instance
+ */
+export interface ReactorConfig {
+  /** NXML source code */
+  source: string;
+  /** Host-provided capabilities (extensions) */
+  extensions?: Record<string, unknown>;
+  /** Initial state for restoration */
+  initialState?: Record<string, RuntimeValue>;
+  /** Enable debug mode */
+  debug?: boolean;
+}
+
+/**
+ * State snapshot for serialization/restoration
+ */
+export interface StateSnapshot {
+  values: Record<string, RuntimeValue>;
+  timestamp: number;
+}
+
+// ============================================================================
+// Sandbox Types
+// ============================================================================
+
+/**
+ * Context provided to sandbox handlers
+ */
+export interface SandboxContext {
+  $state: Record<string, RuntimeValue>;
+  $args: Record<string, unknown>;
+  $view: ViewAPI;
+  $emit: EmitFunction;
+  $ext: Record<string, unknown>;
+  $log: LogFunction;
+}
+
+/**
+ * View API exposed to sandbox
+ */
+export interface ViewAPI {
+  getElementById(id: string): ViewHandle | null;
+}
+
+/**
+ * Handle for imperative view manipulation
+ */
+export interface ViewHandle {
+  /** Override a property temporarily */
+  setProp(prop: string, value: unknown): void;
+  /** Call an imperative method on the component */
+  call(method: string, ...args: unknown[]): void;
+}
+
+/**
+ * Emit function for sending events to host
+ */
+export type EmitFunction = (event: string, payload?: unknown) => void;
+
+/**
+ * Safe logging function
+ */
+export type LogFunction = (...args: unknown[]) => void;
+
+// ============================================================================
+// MCP Types
+// ============================================================================
+
+/**
+ * JSON Schema representation for MCP tool arguments
+ */
+export interface JSONSchema {
+  type: string;
+  description?: string;
+  properties?: Record<string, JSONSchema>;
+  required?: string[];
+  items?: JSONSchema;
+  default?: unknown;
+  enum?: unknown[];
+}
+
+/**
+ * MCP Tool definition
+ */
+export interface MCPTool {
+  name: string;
+  description?: string;
+  inputSchema: JSONSchema;
+}
+
+/**
+ * MCP Resource for state inspection
+ */
+export interface MCPResource {
+  uri: string;
+  name: string;
+  mimeType: string;
+}
+
+/**
+ * Result from tool execution
+ */
+export interface ToolResult {
+  success: boolean;
+  value?: unknown;
+  error?: string;
+}
+
+// ============================================================================
+// Event Types
+// ============================================================================
+
+export type ReactorEventType =
+  | 'mount'
+  | 'unmount'
+  | 'stateChange'
+  | 'toolExecute'
+  | 'error'
+  | 'emit';
+
+export interface ReactorEvent {
+  type: ReactorEventType;
+  payload?: unknown;
+  timestamp: number;
+}
+
+export type ReactorEventHandler = (event: ReactorEvent) => void;
+
+// ============================================================================
+// Validation Types
+// ============================================================================
+
+export interface ValidationError {
+  code: string;
+  message: string;
+  path: string[];
+  loc?: SourceLocation;
+}
+
+export interface ValidationWarning {
+  code: string;
+  message: string;
+  path: string[];
+}
+
+export interface ValidationResult {
+  valid: boolean;
+  errors: ValidationError[];
+  warnings: ValidationWarning[];
+}
+
+// ============================================================================
+// Subscriber Types
+// ============================================================================
+
+export type SubscriberId = string;
+export type StateKey = string;
+
+export interface Subscriber {
+  id: SubscriberId;
+  callback: () => void;
+  dependencies: Set<StateKey>;
+}
+
+// ============================================================================
+// Type Guards
+// ============================================================================
+
+export function isStateNode(node: unknown): node is StateNode {
+  return (node as StateNode)?.kind === 'State';
+}
+
+export function isComputedNode(node: unknown): node is ComputedNode {
+  return (node as ComputedNode)?.kind === 'Computed';
+}
+
+export function isToolNode(node: unknown): node is ToolNode {
+  return (node as ToolNode)?.kind === 'Tool';
+}
+
+export function isLifecycleNode(node: unknown): node is LifecycleNode {
+  return (node as LifecycleNode)?.kind === 'Lifecycle';
+}
+
+export function isExtensionNode(node: unknown): node is ExtensionNode {
+  return (node as ExtensionNode)?.kind === 'Extension';
+}
+
+export function isBindingExpression(value: unknown): value is BindingExpression {
+  if (typeof value !== 'string') return false;
+  return /^\{.*\}$/.test(value.trim());
+}
+
+export function isNexusPanelAST(node: unknown): node is NexusPanelAST {
+  return (node as NexusPanelAST)?.kind === 'NexusPanel';
+}
+```
+
+`nexus-reactor/src/parser/index.ts`:
+
+```ts
+/**
+ * @nexus/reactor - Parser Module
+ * 
+ * NXML parsing and validation.
+ */
+
+export { tokenize, type Token, type TokenType } from './lexer';
+export { parse } from './parser';
+export {
+  validate,
+  validateOrThrow,
+  validateQuick,
+  getToolNames,
+  getStateNames,
+  findTool,
+  findState,
+} from './validator';
+```
+
+`nexus-reactor/src/parser/lexer.ts`:
+
+```ts
+/**
+ * @nexus/reactor - NXML Lexer
+ * 
+ * Tokenizes NXML source into a stream of tokens for the parser.
+ */
+
+import type { SourceLocation } from '../core/types';
+import { ParseError } from '../core/errors';
+
+// ============================================================================
+// Token Types
+// ============================================================================
+
+export type TokenType =
+  | 'TAG_OPEN'        // <
+  | 'TAG_CLOSE'       // >
+  | 'TAG_SELF_CLOSE'  // />
+  | 'TAG_END_OPEN'    // </
+  | 'TAG_NAME'        // NexusPanel, Data, etc.
+  | 'ATTR_NAME'       // name, type, etc.
+  | 'ATTR_VALUE'      // "value" (includes quotes)
+  | 'EQUALS'          // =
+  | 'TEXT'            // Text content between tags
+  | 'CDATA'           // CDATA content
+  | 'COMMENT'         // <!-- comment -->
+  | 'EOF';
+
+export interface Token {
+  type: TokenType;
+  value: string;
+  loc: SourceLocation;
+}
+
+// ============================================================================
+// Lexer State
+// ============================================================================
+
+interface LexerState {
+  source: string;
+  pos: number;
+  line: number;
+  column: number;
+  tokens: Token[];
+}
+
+// ============================================================================
+// Lexer Implementation
+// ============================================================================
+
+/**
+ * Tokenize NXML source into tokens
+ */
+export function tokenize(source: string): Token[] {
+  const state: LexerState = {
+    source,
+    pos: 0,
+    line: 1,
+    column: 1,
+    tokens: [],
+  };
+
+  while (!isAtEnd(state)) {
+    scanToken(state);
+  }
+
+  // Add EOF token
+  state.tokens.push({
+    type: 'EOF',
+    value: '',
+    loc: createLocation(state, state.pos),
+  });
+
+  return state.tokens;
+}
+
+/**
+ * Scan the next token
+ */
+function scanToken(state: LexerState): void {
+  skipWhitespace(state);
+  
+  if (isAtEnd(state)) return;
+
+  const startPos = state.pos;
+  const startLine = state.line;
+  const startColumn = state.column;
+
+  const char = current(state);
+
+  // Check for comments
+  if (char === '<' && lookAhead(state, 1, 3) === '!--') {
+    scanComment(state);
+    return;
+  }
+
+  // Check for CDATA
+  if (char === '<' && lookAhead(state, 1, 8) === '![CDATA[') {
+    scanCDATA(state);
+    return;
+  }
+
+  // Check for end tag
+  if (char === '<' && peek(state, 1) === '/') {
+    advance(state); // <
+    advance(state); // /
+    addToken(state, 'TAG_END_OPEN', '</', startPos, startLine, startColumn);
+    scanTagName(state);
+    skipWhitespace(state);
+    if (current(state) === '>') {
+      const closeStart = state.pos;
+      advance(state);
+      addToken(state, 'TAG_CLOSE', '>', closeStart, state.line, state.column - 1);
+    }
+    return;
+  }
+
+  // Check for start tag
+  if (char === '<') {
+    const openStart = state.pos;
+    advance(state);
+    addToken(state, 'TAG_OPEN', '<', openStart, startLine, startColumn);
+    
+    skipWhitespace(state);
+    scanTagName(state);
+    scanAttributes(state);
+    
+    skipWhitespace(state);
+    
+    // Check for self-closing or regular close
+    if (current(state) === '/' && peek(state, 1) === '>') {
+      const selfCloseStart = state.pos;
+      advance(state);
+      advance(state);
+      addToken(state, 'TAG_SELF_CLOSE', '/>', selfCloseStart, state.line, state.column - 2);
+    } else if (current(state) === '>') {
+      const closeStart = state.pos;
+      advance(state);
+      addToken(state, 'TAG_CLOSE', '>', closeStart, state.line, state.column - 1);
+    } else {
+      throw ParseError.unexpectedToken(
+        current(state),
+        '> or />',
+        createLocation(state, state.pos)
+      );
+    }
+    return;
+  }
+
+  // Text content
+  scanText(state);
+}
+
+/**
+ * Scan a tag name
+ */
+function scanTagName(state: LexerState): void {
+  skipWhitespace(state);
+  
+  const startPos = state.pos;
+  const startLine = state.line;
+  const startColumn = state.column;
+
+  while (!isAtEnd(state) && isNameChar(current(state))) {
+    advance(state);
+  }
+
+  const value = state.source.slice(startPos, state.pos);
+  if (value) {
+    addToken(state, 'TAG_NAME', value, startPos, startLine, startColumn);
+  }
+}
+
+/**
+ * Scan attributes
+ */
+function scanAttributes(state: LexerState): void {
+  while (!isAtEnd(state)) {
+    skipWhitespace(state);
+    
+    const char = current(state);
+    
+    // End of attributes
+    if (char === '>' || char === '/') {
+      break;
+    }
+
+    // Attribute name
+    const nameStartPos = state.pos;
+    const nameStartLine = state.line;
+    const nameStartColumn = state.column;
+
+    while (!isAtEnd(state) && isNameChar(current(state))) {
+      advance(state);
+    }
+
+    const attrName = state.source.slice(nameStartPos, state.pos);
+    if (!attrName) break;
+
+    addToken(state, 'ATTR_NAME', attrName, nameStartPos, nameStartLine, nameStartColumn);
+
+    skipWhitespace(state);
+
+    // Equals sign
+    if (current(state) === '=') {
+      const eqPos = state.pos;
+      advance(state);
+      addToken(state, 'EQUALS', '=', eqPos, state.line, state.column - 1);
+      
+      skipWhitespace(state);
+
+      // Attribute value
+      scanAttributeValue(state);
+    }
+  }
+}
+
+/**
+ * Scan an attribute value (quoted string)
+ */
+function scanAttributeValue(state: LexerState): void {
+  const startPos = state.pos;
+  const startLine = state.line;
+  const startColumn = state.column;
+
+  const quote = current(state);
+  if (quote !== '"' && quote !== "'") {
+    throw ParseError.unexpectedToken(quote, 'quoted string', createLocation(state, state.pos));
+  }
+
+  advance(state); // Opening quote
+
+  while (!isAtEnd(state) && current(state) !== quote) {
+    if (current(state) === '\\' && peek(state, 1) === quote) {
+      advance(state); // Skip escape character
+    }
+    advance(state);
+  }
+
+  if (isAtEnd(state)) {
+    throw new ParseError('Unterminated string', { loc: createLocation(state, startPos) });
+  }
+
+  advance(state); // Closing quote
+
+  const value = state.source.slice(startPos, state.pos);
+  addToken(state, 'ATTR_VALUE', value, startPos, startLine, startColumn);
+}
+
+/**
+ * Scan text content between tags
+ */
+function scanText(state: LexerState): void {
+  const startPos = state.pos;
+  const startLine = state.line;
+  const startColumn = state.column;
+
+  while (!isAtEnd(state) && current(state) !== '<') {
+    advance(state);
+  }
+
+  const value = state.source.slice(startPos, state.pos).trim();
+  if (value) {
+    addToken(state, 'TEXT', value, startPos, startLine, startColumn);
+  }
+}
+
+/**
+ * Scan a comment: <!-- ... -->
+ */
+function scanComment(state: LexerState): void {
+  const startPos = state.pos;
+  const startLine = state.line;
+  const startColumn = state.column;
+
+  // Skip <!--
+  for (let i = 0; i < 4; i++) advance(state);
+
+  while (!isAtEnd(state)) {
+    if (current(state) === '-' && lookAhead(state, 0, 3) === '-->') {
+      break;
+    }
+    advance(state);
+  }
+
+  // Skip -->
+  for (let i = 0; i < 3 && !isAtEnd(state); i++) advance(state);
+
+  const value = state.source.slice(startPos, state.pos);
+  addToken(state, 'COMMENT', value, startPos, startLine, startColumn);
+}
+
+/**
+ * Scan CDATA: <![CDATA[ ... ]]>
+ */
+function scanCDATA(state: LexerState): void {
+  const startPos = state.pos;
+  const startLine = state.line;
+  const startColumn = state.column;
+
+  // Skip <![CDATA[
+  for (let i = 0; i < 9; i++) advance(state);
+
+  const contentStart = state.pos;
+
+  while (!isAtEnd(state)) {
+    if (current(state) === ']' && lookAhead(state, 0, 3) === ']]>') {
+      break;
+    }
+    advance(state);
+  }
+
+  const content = state.source.slice(contentStart, state.pos);
+
+  // Skip ]]>
+  for (let i = 0; i < 3 && !isAtEnd(state); i++) advance(state);
+
+  addToken(state, 'CDATA', content, startPos, startLine, startColumn);
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+function isAtEnd(state: LexerState): boolean {
+  return state.pos >= state.source.length;
+}
+
+function current(state: LexerState): string {
+  return state.source[state.pos] ?? '';
+}
+
+function peek(state: LexerState, offset: number): string {
+  return state.source[state.pos + offset] ?? '';
+}
+
+function lookAhead(state: LexerState, offset: number, length: number): string {
+  return state.source.slice(state.pos + offset, state.pos + offset + length);
+}
+
+function advance(state: LexerState): string {
+  const char = current(state);
+  state.pos++;
+  
+  if (char === '\n') {
+    state.line++;
+    state.column = 1;
+  } else {
+    state.column++;
+  }
+  
+  return char;
+}
+
+function skipWhitespace(state: LexerState): void {
+  while (!isAtEnd(state) && /\s/.test(current(state))) {
+    advance(state);
+  }
+}
+
+function isNameChar(char: string): boolean {
+  return /[a-zA-Z0-9_\-:.]/.test(char);
+}
+
+function addToken(
+  state: LexerState,
+  type: TokenType,
+  value: string,
+  startPos: number,
+  startLine: number,
+  startColumn: number
+): void {
+  state.tokens.push({
+    type,
+    value,
+    loc: {
+      startLine,
+      startColumn,
+      endLine: state.line,
+      endColumn: state.column,
+    },
+  });
+}
+
+function createLocation(state: LexerState, pos: number): SourceLocation {
+  return {
+    startLine: state.line,
+    startColumn: state.column,
+    endLine: state.line,
+    endColumn: state.column,
+  };
+}
+
+// ============================================================================
+// Utility Exports
+// ============================================================================
+
+/**
+ * Check if a string of tokens represents a valid NXML structure
+ */
+export function isValidTokenStream(tokens: Token[]): boolean {
+  let tagDepth = 0;
+  
+  for (const token of tokens) {
+    if (token.type === 'TAG_OPEN') tagDepth++;
+    if (token.type === 'TAG_END_OPEN') tagDepth--;
+    if (token.type === 'TAG_SELF_CLOSE') {
+      // Self-closing doesn't affect depth (already counted by TAG_OPEN)
+      tagDepth--;
+    }
+    if (tagDepth < 0) return false;
+  }
+  
+  return tagDepth === 0;
+}
+
+/**
+ * Get token type name for error messages
+ */
+export function getTokenTypeName(type: TokenType): string {
+  const names: Record<TokenType, string> = {
+    TAG_OPEN: 'opening tag <',
+    TAG_CLOSE: 'closing bracket >',
+    TAG_SELF_CLOSE: 'self-closing />',
+    TAG_END_OPEN: 'end tag </',
+    TAG_NAME: 'tag name',
+    ATTR_NAME: 'attribute name',
+    ATTR_VALUE: 'attribute value',
+    EQUALS: 'equals sign',
+    TEXT: 'text content',
+    CDATA: 'CDATA section',
+    COMMENT: 'comment',
+    EOF: 'end of file',
+  };
+  return names[type] ?? type;
+}
+```
+
+`nexus-reactor/src/parser/parser.ts`:
+
+```ts
+/**
+ * @nexus/reactor - NXML Parser
+ * 
+ * Parses NXML tokens into a NexusPanelAST structure.
+ */
+
+import type { Token, TokenType } from './lexer';
+import { tokenize, getTokenTypeName } from './lexer';
+import { ParseError } from '../core/errors';
+import type {
+  NexusPanelAST,
+  PanelMeta,
+  DataAST,
+  LogicAST,
+  ViewAST,
+  StateNode,
+  ComputedNode,
+  ToolNode,
+  ArgNode,
+  HandlerNode,
+  LifecycleNode,
+  ExtensionNode,
+  ViewNode,
+  SourceLocation,
+  NXMLPrimitiveType,
+  LifecycleEvent,
+} from '../core/types';
+import { parseDefaultValue } from '../utils/coercion';
+
+// ============================================================================
+// Parser State
+// ============================================================================
+
+interface ParserState {
+  tokens: Token[];
+  current: number;
+}
+
+// ============================================================================
+// Main Parser Function
+// ============================================================================
+
+/**
+ * Parse NXML source into a NexusPanelAST
+ */
+export function parse(source: string): NexusPanelAST {
+  const tokens = tokenize(source);
+  const state: ParserState = { tokens, current: 0 };
+  
+  return parseNexusPanel(state);
+}
+
+/**
+ * Parse the root NexusPanel element
+ */
+function parseNexusPanel(state: ParserState): NexusPanelAST {
+  // Expect <NexusPanel ...>
+  expect(state, 'TAG_OPEN');
+  const tagName = expect(state, 'TAG_NAME');
+  
+  if (tagName.value !== 'NexusPanel') {
+    throw new ParseError(
+      `Root element must be <NexusPanel>, got <${tagName.value}>`,
+      { loc: tagName.loc }
+    );
+  }
+
+  // Parse attributes for meta
+  const meta = parsePanelMeta(state);
+
+  // Expect > or />
+  const closeToken = peek(state);
+  if (closeToken.type === 'TAG_SELF_CLOSE') {
+    throw new ParseError('NexusPanel cannot be self-closing', { loc: closeToken.loc });
+  }
+  expect(state, 'TAG_CLOSE');
+
+  // Parse children (Data, Logic, View)
+  let data: DataAST | undefined;
+  let logic: LogicAST | undefined;
+  let view: ViewAST | undefined;
+
+  while (!isAtEnd(state) && !check(state, 'TAG_END_OPEN')) {
+    // Look for child elements
+    if (check(state, 'TAG_OPEN')) {
+      advance(state); // <
+      const childTag = expect(state, 'TAG_NAME');
+      
+      switch (childTag.value) {
+        case 'Data':
+          if (data) {
+            throw new ParseError('Duplicate <Data> section', { loc: childTag.loc });
+          }
+          data = parseDataSection(state, childTag.loc);
+          break;
+          
+        case 'Logic':
+          if (logic) {
+            throw new ParseError('Duplicate <Logic> section', { loc: childTag.loc });
+          }
+          logic = parseLogicSection(state, childTag.loc);
+          break;
+          
+        case 'View':
+          if (view) {
+            throw new ParseError('Duplicate <View> section', { loc: childTag.loc });
+          }
+          view = parseViewSection(state, childTag.loc);
+          break;
+          
+        default:
+          throw new ParseError(
+            `Unknown section <${childTag.value}> in NexusPanel. Expected Data, Logic, or View`,
+            { loc: childTag.loc }
+          );
+      }
+    } else {
+      advance(state);
+    }
+  }
+
+  // Expect </NexusPanel>
+  expect(state, 'TAG_END_OPEN');
+  const endTagName = expect(state, 'TAG_NAME');
+  if (endTagName.value !== 'NexusPanel') {
+    throw new ParseError(
+      `Expected </NexusPanel>, got </${endTagName.value}>`,
+      { loc: endTagName.loc }
+    );
+  }
+  expect(state, 'TAG_CLOSE');
+
+  return {
+    kind: 'NexusPanel',
+    meta,
+    data: data ?? { kind: 'Data', states: [], computed: [] },
+    logic: logic ?? { kind: 'Logic', extensions: [], tools: [], lifecycles: [] },
+    view: view ?? { kind: 'View', root: { type: 'Layout', props: {}, children: [] } },
+  };
+}
+
+/**
+ * Parse panel meta attributes
+ */
+function parsePanelMeta(state: ParserState): PanelMeta {
+  const attrs = parseAttributes(state);
+  
+  return {
+    title: attrs.title as string ?? 'Untitled Panel',
+    description: attrs.description as string,
+    id: attrs.id as string,
+    version: attrs.version as string,
+    author: attrs.author as string,
+    tags: attrs.tags ? String(attrs.tags).split(',').map(t => t.trim()) : undefined,
+  };
+}
+
+// ============================================================================
+// Data Section Parser
+// ============================================================================
+
+function parseDataSection(state: ParserState, startLoc: SourceLocation): DataAST {
+  const states: StateNode[] = [];
+  const computed: ComputedNode[] = [];
+
+  // Check for self-closing or attributes
+  skipAttributes(state);
+  
+  if (check(state, 'TAG_SELF_CLOSE')) {
+    advance(state);
+    return { kind: 'Data', states, computed, loc: startLoc };
+  }
+  
+  expect(state, 'TAG_CLOSE');
+
+  // Parse children
+  while (!isAtEnd(state) && !check(state, 'TAG_END_OPEN')) {
+    if (check(state, 'TAG_OPEN')) {
+      advance(state);
+      const childTag = expect(state, 'TAG_NAME');
+      
+      switch (childTag.value) {
+        case 'State':
+          states.push(parseStateNode(state, childTag.loc));
+          break;
+        case 'Computed':
+          computed.push(parseComputedNode(state, childTag.loc));
+          break;
+        default:
+          throw new ParseError(
+            `Unknown element <${childTag.value}> in Data section`,
+            { loc: childTag.loc }
+          );
+      }
+    } else {
+      advance(state);
+    }
+  }
+
+  // Expect </Data>
+  expectClosingTag(state, 'Data');
+
+  return { kind: 'Data', states, computed, loc: startLoc };
+}
+
+function parseStateNode(state: ParserState, loc: SourceLocation): StateNode {
+  const attrs = parseAttributes(state);
+  expectSelfCloseOrEmpty(state, 'State');
+
+  const name = attrs.name as string;
+  const type = attrs.type as NXMLPrimitiveType ?? 'string';
+  const defaultValue = parseDefaultValue(attrs.default as string, type);
+
+  if (!name) {
+    throw new ParseError('State must have a name attribute', { loc });
+  }
+
+  return {
+    kind: 'State',
+    name,
+    type,
+    default: defaultValue,
+    loc,
+  };
+}
+
+function parseComputedNode(state: ParserState, loc: SourceLocation): ComputedNode {
+  const attrs = parseAttributes(state);
+  expectSelfCloseOrEmpty(state, 'Computed');
+
+  const name = attrs.name as string;
+  const value = attrs.value as string;
+
+  if (!name) {
+    throw new ParseError('Computed must have a name attribute', { loc });
+  }
+  if (!value) {
+    throw new ParseError('Computed must have a value attribute', { loc });
+  }
+
+  return {
+    kind: 'Computed',
+    name,
+    value,
+    loc,
+  };
+}
+
+// ============================================================================
+// Logic Section Parser
+// ============================================================================
+
+function parseLogicSection(state: ParserState, startLoc: SourceLocation): LogicAST {
+  const extensions: ExtensionNode[] = [];
+  const tools: ToolNode[] = [];
+  const lifecycles: LifecycleNode[] = [];
+
+  skipAttributes(state);
+  
+  if (check(state, 'TAG_SELF_CLOSE')) {
+    advance(state);
+    return { kind: 'Logic', extensions, tools, lifecycles, loc: startLoc };
+  }
+  
+  expect(state, 'TAG_CLOSE');
+
+  while (!isAtEnd(state) && !check(state, 'TAG_END_OPEN')) {
+    if (check(state, 'TAG_OPEN')) {
+      advance(state);
+      const childTag = expect(state, 'TAG_NAME');
+      
+      switch (childTag.value) {
+        case 'Extension':
+          extensions.push(parseExtensionNode(state, childTag.loc));
+          break;
+        case 'Tool':
+          tools.push(parseToolNode(state, childTag.loc));
+          break;
+        case 'Lifecycle':
+          lifecycles.push(parseLifecycleNode(state, childTag.loc));
+          break;
+        default:
+          throw new ParseError(
+            `Unknown element <${childTag.value}> in Logic section`,
+            { loc: childTag.loc }
+          );
+      }
+    } else {
+      advance(state);
+    }
+  }
+
+  expectClosingTag(state, 'Logic');
+
+  return { kind: 'Logic', extensions, tools, lifecycles, loc: startLoc };
+}
+
+function parseExtensionNode(state: ParserState, loc: SourceLocation): ExtensionNode {
+  const attrs = parseAttributes(state);
+  expectSelfCloseOrEmpty(state, 'Extension');
+
+  const name = attrs.name as string;
+  const alias = (attrs.alias as string) ?? name.split('.').pop() ?? name;
+  const source = attrs.source as string;
+
+  if (!name) {
+    throw new ParseError('Extension must have a name attribute', { loc });
+  }
+
+  return {
+    kind: 'Extension',
+    name,
+    alias,
+    source,
+    loc,
+  };
+}
+
+function parseToolNode(state: ParserState, loc: SourceLocation): ToolNode {
+  const attrs = parseAttributes(state);
+  
+  const name = attrs.name as string;
+  const description = attrs.description as string;
+  
+  if (!name) {
+    throw new ParseError('Tool must have a name attribute', { loc });
+  }
+
+  // Check for self-closing (invalid - tools need content)
+  if (check(state, 'TAG_SELF_CLOSE')) {
+    advance(state);
+    throw new ParseError('Tool must have a Handler child', { loc });
+  }
+  
+  expect(state, 'TAG_CLOSE');
+
+  const args: ArgNode[] = [];
+  let handler: HandlerNode | undefined;
+
+  while (!isAtEnd(state) && !check(state, 'TAG_END_OPEN')) {
+    if (check(state, 'TAG_OPEN')) {
+      advance(state);
+      const childTag = expect(state, 'TAG_NAME');
+      
+      switch (childTag.value) {
+        case 'Arg':
+          args.push(parseArgNode(state, childTag.loc));
+          break;
+        case 'Handler':
+          handler = parseHandlerNode(state, childTag.loc);
+          break;
+        default:
+          throw new ParseError(
+            `Unknown element <${childTag.value}> in Tool`,
+            { loc: childTag.loc }
+          );
+      }
+    } else {
+      advance(state);
+    }
+  }
+
+  if (!handler) {
+    throw new ParseError('Tool must have a Handler child', { loc });
+  }
+
+  expectClosingTag(state, 'Tool');
+
+  return {
+    kind: 'Tool',
+    name,
+    description,
+    args,
+    handler,
+    loc,
+  };
+}
+
+function parseArgNode(state: ParserState, loc: SourceLocation): ArgNode {
+  const attrs = parseAttributes(state);
+  expectSelfCloseOrEmpty(state, 'Arg');
+
+  const name = attrs.name as string;
+  const type = attrs.type as NXMLPrimitiveType ?? 'string';
+  const required = attrs.required !== 'false';
+  const defaultValue = attrs.default;
+  const description = attrs.description as string;
+
+  if (!name) {
+    throw new ParseError('Arg must have a name attribute', { loc });
+  }
+
+  return {
+    kind: 'Arg',
+    name,
+    type,
+    required,
+    default: defaultValue,
+    description,
+    loc,
+  };
+}
+
+function parseHandlerNode(state: ParserState, loc: SourceLocation): HandlerNode {
+  skipAttributes(state);
+  
+  if (check(state, 'TAG_SELF_CLOSE')) {
+    advance(state);
+    return { kind: 'Handler', code: '', loc };
+  }
+  
+  expect(state, 'TAG_CLOSE');
+
+  // Collect text/CDATA content
+  let code = '';
+  
+  while (!isAtEnd(state) && !check(state, 'TAG_END_OPEN')) {
+    const token = peek(state);
+    if (token.type === 'TEXT' || token.type === 'CDATA') {
+      code += token.value;
+    }
+    advance(state);
+  }
+
+  expectClosingTag(state, 'Handler');
+
+  // Detect async
+  const isAsync = /\bawait\b/.test(code);
+
+  return {
+    kind: 'Handler',
+    code: code.trim(),
+    isAsync,
+    loc,
+  };
+}
+
+function parseLifecycleNode(state: ParserState, loc: SourceLocation): LifecycleNode {
+  const attrs = parseAttributes(state);
+  
+  const on = attrs.on as LifecycleEvent;
+  if (on !== 'mount' && on !== 'unmount') {
+    throw new ParseError(
+      `Lifecycle "on" attribute must be "mount" or "unmount", got "${on}"`,
+      { loc }
+    );
+  }
+
+  if (check(state, 'TAG_SELF_CLOSE')) {
+    advance(state);
+    throw new ParseError('Lifecycle must have a Handler child', { loc });
+  }
+  
+  expect(state, 'TAG_CLOSE');
+
+  let handler: HandlerNode | undefined;
+
+  while (!isAtEnd(state) && !check(state, 'TAG_END_OPEN')) {
+    if (check(state, 'TAG_OPEN')) {
+      advance(state);
+      const childTag = expect(state, 'TAG_NAME');
+      
+      if (childTag.value === 'Handler') {
+        handler = parseHandlerNode(state, childTag.loc);
+      } else {
+        throw new ParseError(
+          `Lifecycle can only contain Handler, got <${childTag.value}>`,
+          { loc: childTag.loc }
+        );
+      }
+    } else {
+      advance(state);
+    }
+  }
+
+  if (!handler) {
+    throw new ParseError('Lifecycle must have a Handler child', { loc });
+  }
+
+  expectClosingTag(state, 'Lifecycle');
+
+  return {
+    kind: 'Lifecycle',
+    on,
+    handler,
+    loc,
+  };
+}
+
+// ============================================================================
+// View Section Parser
+// ============================================================================
+
+function parseViewSection(state: ParserState, startLoc: SourceLocation): ViewAST {
+  skipAttributes(state);
+  
+  if (check(state, 'TAG_SELF_CLOSE')) {
+    advance(state);
+    return {
+      kind: 'View',
+      root: { type: 'Layout', props: {}, children: [] },
+      loc: startLoc,
+    };
+  }
+  
+  expect(state, 'TAG_CLOSE');
+
+  // Parse the root view node (usually Layout)
+  let root: ViewNode | undefined;
+
+  while (!isAtEnd(state) && !check(state, 'TAG_END_OPEN')) {
+    if (check(state, 'TAG_OPEN')) {
+      if (root) {
+        throw new ParseError('View can only have one root element', { loc: peek(state).loc });
+      }
+      root = parseViewNode(state);
+    } else {
+      advance(state);
+    }
+  }
+
+  expectClosingTag(state, 'View');
+
+  return {
+    kind: 'View',
+    root: root ?? { type: 'Layout', props: {}, children: [] },
+    loc: startLoc,
+  };
+}
+
+function parseViewNode(state: ParserState): ViewNode {
+  expect(state, 'TAG_OPEN');
+  const tagToken = expect(state, 'TAG_NAME');
+  const tagName = tagToken.value;
+  
+  const attrs = parseAttributes(state);
+  
+  // Convert attributes to props
+  const props: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(attrs)) {
+    props[key] = value;
+  }
+
+  // Extract id if present
+  const id = props.id as string | undefined;
+
+  // Check for self-closing
+  if (check(state, 'TAG_SELF_CLOSE')) {
+    advance(state);
+    return {
+      type: tagName,
+      id,
+      props,
+      children: [],
+      loc: tagToken.loc,
+    };
+  }
+  
+  expect(state, 'TAG_CLOSE');
+
+  // Parse children
+  const children: ViewNode[] = [];
+  
+  while (!isAtEnd(state) && !check(state, 'TAG_END_OPEN')) {
+    if (check(state, 'TAG_OPEN')) {
+      children.push(parseViewNode(state));
+    } else if (check(state, 'TEXT') || check(state, 'CDATA')) {
+      // Text content - store in props.content if not already set
+      const textToken = advance(state);
+      if (!props.content && textToken.value.trim()) {
+        props.content = textToken.value.trim();
+      }
+    } else {
+      advance(state);
+    }
+  }
+
+  expectClosingTag(state, tagName);
+
+  return {
+    type: tagName,
+    id,
+    props,
+    children,
+    loc: tagToken.loc,
+  };
+}
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+function parseAttributes(state: ParserState): Record<string, unknown> {
+  const attrs: Record<string, unknown> = {};
+  
+  while (check(state, 'ATTR_NAME')) {
+    const nameToken = advance(state);
+    
+    if (check(state, 'EQUALS')) {
+      advance(state); // =
+      const valueToken = expect(state, 'ATTR_VALUE');
+      // Remove quotes from value
+      attrs[nameToken.value] = valueToken.value.slice(1, -1);
+    } else {
+      // Boolean attribute (presence = true)
+      attrs[nameToken.value] = true;
+    }
+  }
+  
+  return attrs;
+}
+
+function skipAttributes(state: ParserState): void {
+  parseAttributes(state);
+}
+
+function expectSelfCloseOrEmpty(state: ParserState, tagName: string): void {
+  if (check(state, 'TAG_SELF_CLOSE')) {
+    advance(state);
+    return;
+  }
+  
+  expect(state, 'TAG_CLOSE');
+  
+  // Skip any whitespace/text
+  while (check(state, 'TEXT')) {
+    advance(state);
+  }
+  
+  expectClosingTag(state, tagName);
+}
+
+function expectClosingTag(state: ParserState, tagName: string): void {
+  expect(state, 'TAG_END_OPEN');
+  const endName = expect(state, 'TAG_NAME');
+  if (endName.value !== tagName) {
+    throw new ParseError(
+      `Expected </${tagName}>, got </${endName.value}>`,
+      { loc: endName.loc }
+    );
+  }
+  expect(state, 'TAG_CLOSE');
+}
+
+function peek(state: ParserState): Token {
+  return state.tokens[state.current] ?? { type: 'EOF', value: '', loc: { startLine: 0, startColumn: 0, endLine: 0, endColumn: 0 } };
+}
+
+function check(state: ParserState, type: TokenType): boolean {
+  return peek(state).type === type;
+}
+
+function advance(state: ParserState): Token {
+  const token = peek(state);
+  if (token.type !== 'EOF') {
+    state.current++;
+  }
+  return token;
+}
+
+function expect(state: ParserState, type: TokenType): Token {
+  const token = peek(state);
+  if (token.type !== type) {
+    throw ParseError.unexpectedToken(
+      token.value || getTokenTypeName(token.type),
+      getTokenTypeName(type),
+      token.loc
+    );
+  }
+  return advance(state);
+}
+
+function isAtEnd(state: ParserState): boolean {
+  return peek(state).type === 'EOF';
+}
+```
+
+`nexus-reactor/src/parser/validator.ts`:
+
+```ts
+/**
+ * @nexus/reactor - AST Validator
+ * 
+ * Validates NexusPanelAST against protocol rules.
+ */
+
+import type {
+    NexusPanelAST,
+    DataAST,
+    LogicAST,
+    ViewAST,
+    ViewNode,
+    ValidationResult,
+    ValidationError,
+    ValidationWarning,
+  } from '../core/types';
+  import {
+    ValidationError as ValidationErrorClass,
+    AggregateValidationError,
+  } from '../core/errors';
+  import {
+    IDENTIFIER_PATTERN,
+    FORBIDDEN_GLOBALS,
+    ERROR_CODES,
+    WARNING_CODES,
+  } from '../core/constants';
+  import { extractStateRefs, extractScopeRefs, isBindingExpression } from '../utils/expression';
+  
+  // ============================================================================
+  // Main Validation Function
+  // ============================================================================
+  
+  /**
+   * Validate a NexusPanelAST
+   */
+  export function validate(ast: NexusPanelAST): ValidationResult {
+    const errors: ValidationError[] = [];
+    const warnings: ValidationWarning[] = [];
+  
+    // Validate Data section
+    validateData(ast.data, errors, warnings);
+  
+    // Validate Logic section
+    validateLogic(ast.logic, errors, warnings);
+  
+    // Validate View section
+    validateView(ast.view, ast.data, ast.logic, errors, warnings);
+  
+    // Cross-reference validation
+    validateCrossReferences(ast, errors, warnings);
+  
+    return {
+      valid: errors.length === 0,
+      errors,
+      warnings,
+    };
+  }
+  
+  /**
+   * Validate and throw if invalid
+   */
+  export function validateOrThrow(ast: NexusPanelAST): void {
+    const result = validate(ast);
+    
+    if (!result.valid) {
+      const errorObjs = result.errors.map(
+        (e) => new ValidationErrorClass(e.code, e.message, { path: e.path, loc: e.loc })
+      );
+      const warningObjs = result.warnings.map(
+        (w) => new ValidationErrorClass(w.code, w.message, { path: w.path, severity: 'warning' })
+      );
+      throw new AggregateValidationError(errorObjs, warningObjs);
+    }
+  }
+  
+  // ============================================================================
+  // Data Validation
+  // ============================================================================
+  
+  function validateData(
+    data: DataAST,
+    errors: ValidationError[],
+    warnings: ValidationWarning[]
+  ): void {
+    const names = new Set<string>();
+  
+    // Validate state nodes
+    for (const state of data.states) {
+      // Check identifier validity
+      if (!IDENTIFIER_PATTERN.test(state.name)) {
+        errors.push({
+          code: ERROR_CODES.INVALID_IDENTIFIER,
+          message: `Invalid state name: "${state.name}"`,
+          path: ['data', 'states', state.name],
+          loc: state.loc,
+        });
+      }
+  
+      // Check for duplicates
+      if (names.has(state.name)) {
+        errors.push({
+          code: ERROR_CODES.DUPLICATE_STATE,
+          message: `Duplicate state/computed name: "${state.name}"`,
+          path: ['data', 'states', state.name],
+          loc: state.loc,
+        });
+      }
+      names.add(state.name);
+    }
+  
+    // Validate computed nodes
+    for (const computed of data.computed) {
+      if (!IDENTIFIER_PATTERN.test(computed.name)) {
+        errors.push({
+          code: ERROR_CODES.INVALID_IDENTIFIER,
+          message: `Invalid computed name: "${computed.name}"`,
+          path: ['data', 'computed', computed.name],
+          loc: computed.loc,
+        });
+      }
+  
+      if (names.has(computed.name)) {
+        errors.push({
+          code: ERROR_CODES.DUPLICATE_STATE,
+          message: `Duplicate state/computed name: "${computed.name}"`,
+          path: ['data', 'computed', computed.name],
+          loc: computed.loc,
+        });
+      }
+      names.add(computed.name);
+  
+      // Check that computed value references state
+      const refs = extractStateRefs(computed.value);
+      const undefinedRefs = refs.filter((ref) => !names.has(ref));
+      for (const ref of undefinedRefs) {
+        errors.push({
+          code: ERROR_CODES.UNDEFINED_STATE_REFERENCE,
+          message: `Computed "${computed.name}" references undefined state: "${ref}"`,
+          path: ['data', 'computed', computed.name],
+          loc: computed.loc,
+        });
+      }
+    }
+  }
+  
+  // ============================================================================
+  // Logic Validation
+  // ============================================================================
+  
+  function validateLogic(
+    logic: LogicAST,
+    errors: ValidationError[],
+    warnings: ValidationWarning[]
+  ): void {
+    const toolNames = new Set<string>();
+    const extensionAliases = new Set<string>();
+  
+    // Validate extensions
+    for (const ext of logic.extensions) {
+      if (!IDENTIFIER_PATTERN.test(ext.alias)) {
+        errors.push({
+          code: ERROR_CODES.INVALID_IDENTIFIER,
+          message: `Invalid extension alias: "${ext.alias}"`,
+          path: ['logic', 'extensions', ext.alias],
+          loc: ext.loc,
+        });
+      }
+  
+      if (extensionAliases.has(ext.alias)) {
+        errors.push({
+          code: ERROR_CODES.DUPLICATE_EXTENSION_ALIAS,
+          message: `Duplicate extension alias: "${ext.alias}"`,
+          path: ['logic', 'extensions', ext.alias],
+          loc: ext.loc,
+        });
+      }
+      extensionAliases.add(ext.alias);
+    }
+  
+    // Validate tools
+    for (const tool of logic.tools) {
+      if (!IDENTIFIER_PATTERN.test(tool.name)) {
+        errors.push({
+          code: ERROR_CODES.INVALID_IDENTIFIER,
+          message: `Invalid tool name: "${tool.name}"`,
+          path: ['logic', 'tools', tool.name],
+          loc: tool.loc,
+        });
+      }
+  
+      if (toolNames.has(tool.name)) {
+        errors.push({
+          code: ERROR_CODES.DUPLICATE_TOOL,
+          message: `Duplicate tool name: "${tool.name}"`,
+          path: ['logic', 'tools', tool.name],
+          loc: tool.loc,
+        });
+      }
+      toolNames.add(tool.name);
+  
+      // Validate args
+      const argNames = new Set<string>();
+      for (const arg of tool.args) {
+        if (!IDENTIFIER_PATTERN.test(arg.name)) {
+          errors.push({
+            code: ERROR_CODES.INVALID_IDENTIFIER,
+            message: `Invalid argument name: "${arg.name}"`,
+            path: ['logic', 'tools', tool.name, 'args', arg.name],
+            loc: arg.loc,
+          });
+        }
+  
+        if (argNames.has(arg.name)) {
+          errors.push({
+            code: ERROR_CODES.DUPLICATE_STATE, // Reusing code
+            message: `Duplicate argument name in tool "${tool.name}": "${arg.name}"`,
+            path: ['logic', 'tools', tool.name, 'args', arg.name],
+            loc: arg.loc,
+          });
+        }
+        argNames.add(arg.name);
+      }
+  
+      // Validate handler code
+      validateHandlerCode(
+        tool.handler.code,
+        extensionAliases,
+        ['logic', 'tools', tool.name, 'handler'],
+        errors
+      );
+    }
+  
+    // Validate lifecycles
+    let mountCount = 0;
+    let unmountCount = 0;
+  
+    for (const lifecycle of logic.lifecycles) {
+      if (lifecycle.on === 'mount') {
+        mountCount++;
+        if (mountCount > 1) {
+          errors.push({
+            code: ERROR_CODES.DUPLICATE_LIFECYCLE,
+            message: 'Only one mount lifecycle allowed',
+            path: ['logic', 'lifecycles', 'mount'],
+            loc: lifecycle.loc,
+          });
+        }
+      } else if (lifecycle.on === 'unmount') {
+        unmountCount++;
+        if (unmountCount > 1) {
+          errors.push({
+            code: ERROR_CODES.DUPLICATE_LIFECYCLE,
+            message: 'Only one unmount lifecycle allowed',
+            path: ['logic', 'lifecycles', 'unmount'],
+            loc: lifecycle.loc,
+          });
+        }
+      }
+  
+      validateHandlerCode(
+        lifecycle.handler.code,
+        extensionAliases,
+        ['logic', 'lifecycles', lifecycle.on, 'handler'],
+        errors
+      );
+    }
+  
+    // Warning: extensions without mount
+    if (logic.extensions.length > 0 && mountCount === 0) {
+      warnings.push({
+        code: WARNING_CODES.NO_MOUNT_WITH_EXTENSIONS,
+        message: 'Extensions declared but no mount lifecycle to initialize them',
+        path: ['logic', 'extensions'],
+      });
+    }
+  }
+  
+  function validateHandlerCode(
+    code: string,
+    extensionAliases: Set<string>,
+    path: string[],
+    errors: ValidationError[]
+  ): void {
+    // Check for forbidden globals
+    for (const global of FORBIDDEN_GLOBALS) {
+      // Use word boundary to avoid false positives (e.g., "document" in "documentation")
+      const regex = new RegExp(`\\b${global}\\b`);
+      if (regex.test(code)) {
+        errors.push({
+          code: ERROR_CODES.FORBIDDEN_GLOBAL,
+          message: `Handler code contains forbidden global: "${global}"`,
+          path,
+        });
+      }
+    }
+  
+    // Check extension usage
+    const extUsagePattern = /\$ext\.([a-zA-Z_$][a-zA-Z0-9_$]*)/g;
+    let match;
+    while ((match = extUsagePattern.exec(code)) !== null) {
+      const alias = match[1];
+      if (!extensionAliases.has(alias)) {
+        errors.push({
+          code: ERROR_CODES.UNDECLARED_EXTENSION,
+          message: `Usage of undeclared extension: "$ext.${alias}"`,
+          path,
+        });
+      }
+    }
+  }
+  
+  // ============================================================================
+  // View Validation
+  // ============================================================================
+  
+  function validateView(
+    view: ViewAST,
+    data: DataAST,
+    logic: LogicAST,
+    errors: ValidationError[],
+    warnings: ValidationWarning[]
+  ): void {
+    const viewIds = new Set<string>();
+    const stateNames = new Set([
+      ...data.states.map((s) => s.name),
+      ...data.computed.map((c) => c.name),
+    ]);
+    const toolNames = new Set(logic.tools.map((t) => t.name));
+  
+    // Recursive validation
+    validateViewNode(
+      view.root,
+      stateNames,
+      toolNames,
+      viewIds,
+      [], // scope stack
+      ['view', 'root'],
+      errors,
+      warnings
+    );
+  }
+  
+  function validateViewNode(
+    node: ViewNode,
+    stateNames: Set<string>,
+    toolNames: Set<string>,
+    viewIds: Set<string>,
+    scopeStack: string[],
+    path: string[],
+    errors: ValidationError[],
+    warnings: ValidationWarning[]
+  ): void {
+    // Check for duplicate IDs
+    if (node.id) {
+      if (viewIds.has(node.id)) {
+        errors.push({
+          code: ERROR_CODES.DUPLICATE_VIEW_ID,
+          message: `Duplicate view id: "${node.id}"`,
+          path: [...path, 'id'],
+          loc: node.loc,
+        });
+      }
+      viewIds.add(node.id);
+    }
+  
+    // Check trigger references
+    const trigger = node.props.trigger as string | undefined;
+    if (trigger && !toolNames.has(trigger)) {
+      errors.push({
+        code: ERROR_CODES.UNDEFINED_TOOL_REFERENCE,
+        message: `Reference to undefined tool: "${trigger}"`,
+        path: [...path, 'trigger'],
+        loc: node.loc,
+      });
+    }
+  
+    // Check binding expressions
+    for (const [key, value] of Object.entries(node.props)) {
+      if (typeof value === 'string' && isBindingExpression(value)) {
+        // Extract state references
+        const stateRefs = extractStateRefs(value);
+        for (const ref of stateRefs) {
+          if (!stateNames.has(ref)) {
+            errors.push({
+              code: ERROR_CODES.UNDEFINED_STATE_REFERENCE,
+              message: `Reference to undefined state: "${ref}"`,
+              path: [...path, key],
+              loc: node.loc,
+            });
+          }
+        }
+  
+        // Check scope references
+        const scopeRefs = extractScopeRefs(value);
+        if (scopeRefs.length > 0 && scopeStack.length === 0) {
+          errors.push({
+            code: ERROR_CODES.INVALID_SCOPE_REFERENCE,
+            message: '$scope reference used outside of <Iterate> context',
+            path: [...path, key],
+            loc: node.loc,
+          });
+        }
+      }
+    }
+  
+    // Handle Iterate - add to scope stack
+    let newScopeStack = scopeStack;
+    if (node.type === 'Iterate') {
+      const as = node.props.as as string;
+      if (as) {
+        newScopeStack = [...scopeStack, as];
+      }
+    }
+  
+    // Recursively validate children
+    for (let i = 0; i < node.children.length; i++) {
+      validateViewNode(
+        node.children[i],
+        stateNames,
+        toolNames,
+        viewIds,
+        newScopeStack,
+        [...path, 'children', String(i)],
+        errors,
+        warnings
+      );
+    }
+  }
+  
+  // ============================================================================
+  // Cross-Reference Validation
+  // ============================================================================
+  
+  function validateCrossReferences(
+    ast: NexusPanelAST,
+    errors: ValidationError[],
+    warnings: ValidationWarning[]
+  ): void {
+    const stateNames = new Set([
+      ...ast.data.states.map((s) => s.name),
+      ...ast.data.computed.map((c) => c.name),
+    ]);
+    const toolNames = new Set(ast.logic.tools.map((t) => t.name));
+  
+    // Collect all referenced states and tools from view
+    const referencedStates = new Set<string>();
+    const triggeredTools = new Set<string>();
+  
+    collectViewReferences(ast.view.root, referencedStates, triggeredTools);
+  
+    // Also collect from logic handlers
+    for (const tool of ast.logic.tools) {
+      const refs = extractStateRefs(tool.handler.code);
+      refs.forEach((ref) => referencedStates.add(ref));
+    }
+  
+    for (const lifecycle of ast.logic.lifecycles) {
+      const refs = extractStateRefs(lifecycle.handler.code);
+      refs.forEach((ref) => referencedStates.add(ref));
+    }
+  
+    // Warning: unused states
+    for (const state of ast.data.states) {
+      if (!referencedStates.has(state.name)) {
+        warnings.push({
+          code: WARNING_CODES.UNUSED_STATE,
+          message: `State "${state.name}" is defined but never referenced`,
+          path: ['data', 'states', state.name],
+        });
+      }
+    }
+  
+    // Warning: unused tools
+    for (const tool of ast.logic.tools) {
+      if (!triggeredTools.has(tool.name)) {
+        warnings.push({
+          code: WARNING_CODES.UNUSED_TOOL,
+          message: `Tool "${tool.name}" is defined but not triggered from view`,
+          path: ['logic', 'tools', tool.name],
+        });
+      }
+    }
+  }
+  
+  function collectViewReferences(
+    node: ViewNode,
+    stateRefs: Set<string>,
+    toolRefs: Set<string>
+  ): void {
+    // Collect trigger
+    const trigger = node.props.trigger as string | undefined;
+    if (trigger) {
+      toolRefs.add(trigger);
+    }
+  
+    // Collect state refs from bindings
+    for (const value of Object.values(node.props)) {
+      if (typeof value === 'string' && isBindingExpression(value)) {
+        const refs = extractStateRefs(value);
+        refs.forEach((ref) => stateRefs.add(ref));
+      }
+    }
+  
+    // Recurse children
+    for (const child of node.children) {
+      collectViewReferences(child, stateRefs, toolRefs);
+    }
+  }
+  
+  // ============================================================================
+  // Utility Exports
+  // ============================================================================
+  
+  /**
+   * Quick validation - just schema checks, no cross-references
+   */
+  export function validateQuick(ast: NexusPanelAST): boolean {
+    const errors: ValidationError[] = [];
+    const warnings: ValidationWarning[] = [];
+  
+    validateData(ast.data, errors, warnings);
+    validateLogic(ast.logic, errors, warnings);
+  
+    return errors.length === 0;
+  }
+  
+  /**
+   * Get all tool names from a panel
+   */
+  export function getToolNames(ast: NexusPanelAST): string[] {
+    return ast.logic.tools.map((t) => t.name);
+  }
+  
+  /**
+   * Get all state names from a panel
+   */
+  export function getStateNames(ast: NexusPanelAST): string[] {
+    return [
+      ...ast.data.states.map((s) => s.name),
+      ...ast.data.computed.map((c) => c.name),
+    ];
+  }
+  
+  /**
+   * Find a tool by name
+   */
+  export function findTool(ast: NexusPanelAST, name: string) {
+    return ast.logic.tools.find((t) => t.name === name);
+  }
+  
+  /**
+   * Find a state by name
+   */
+  export function findState(ast: NexusPanelAST, name: string) {
+    const state = ast.data.states.find((s) => s.name === name);
+    if (state) return state;
+    return ast.data.computed.find((c) => c.name === name);
+  }
+```
+
+`nexus-reactor/src/state/proxy.ts`:
+
+```ts
+/**
+ * @nexus/reactor - Reactive Proxy
+ * 
+ * Proxy-based reactivity implementation for state tracking.
+ */
+
+import type { RuntimeValue, StateKey, SubscriberId } from '../core/types';
+import { MAX_RECURSION_DEPTH } from '../core/constants';
+import { StateError, SandboxError } from '../core/errors';
+import { createDebugger } from '../utils/debug';
+
+const debug = createDebugger('Proxy');
+
+// ============================================================================
+// Types
+// ============================================================================
+
+export interface DependencyTracker {
+  /** Currently active subscriber (component or computed) */
+  activeSubscriber: SubscriberId | null;
+  /** Map of state keys to their subscribers */
+  dependencies: Map<StateKey, Set<SubscriberId>>;
+  /** Map of subscribers to their dependencies */
+  subscriberDeps: Map<SubscriberId, Set<StateKey>>;
+  /** Callbacks for each subscriber */
+  callbacks: Map<SubscriberId, () => void>;
+  /** Current update depth for loop detection */
+  updateDepth: number;
+}
+
+export interface ProxyOptions {
+  /** Callback when state is accessed (for dependency tracking) */
+  onGet?: (key: StateKey) => void;
+  /** Callback when state is changed */
+  onSet?: (key: StateKey, value: RuntimeValue, oldValue: RuntimeValue) => void;
+  /** Type definitions for validation */
+  types?: Map<string, string>;
+  /** Whether this is a read-only proxy (for computed values) */
+  readOnly?: boolean;
+}
+
+// ============================================================================
+// Dependency Tracker
+// ============================================================================
+
+/**
+ * Create a new dependency tracker
+ */
+export function createDependencyTracker(): DependencyTracker {
+  return {
+    activeSubscriber: null,
+    dependencies: new Map(),
+    subscriberDeps: new Map(),
+    callbacks: new Map(),
+    updateDepth: 0,
+  };
+}
+
+/**
+ * Begin tracking dependencies for a subscriber
+ */
+export function startTracking(
+  tracker: DependencyTracker,
+  subscriberId: SubscriberId,
+  callback: () => void
+): void {
+  // Clear old dependencies for this subscriber
+  const oldDeps = tracker.subscriberDeps.get(subscriberId);
+  if (oldDeps) {
+    for (const key of oldDeps) {
+      tracker.dependencies.get(key)?.delete(subscriberId);
+    }
+  }
+  
+  tracker.subscriberDeps.set(subscriberId, new Set());
+  tracker.callbacks.set(subscriberId, callback);
+  tracker.activeSubscriber = subscriberId;
+}
+
+/**
+ * Stop tracking dependencies
+ */
+export function stopTracking(tracker: DependencyTracker): void {
+  tracker.activeSubscriber = null;
+}
+
+/**
+ * Record a dependency access
+ */
+export function recordDependency(tracker: DependencyTracker, key: StateKey): void {
+  const subscriber = tracker.activeSubscriber;
+  if (!subscriber) return;
+
+  // Add to dependencies map
+  if (!tracker.dependencies.has(key)) {
+    tracker.dependencies.set(key, new Set());
+  }
+  tracker.dependencies.get(key)!.add(subscriber);
+
+  // Add to subscriber's deps
+  if (!tracker.subscriberDeps.has(subscriber)) {
+    tracker.subscriberDeps.set(subscriber, new Set());
+  }
+  tracker.subscriberDeps.get(subscriber)!.add(key);
+
+  debug.log(`Dependency: ${subscriber} -> ${key}`);
+}
+
+/**
+ * Notify all subscribers of a state change
+ */
+export function notifySubscribers(tracker: DependencyTracker, key: StateKey): void {
+  const subscribers = tracker.dependencies.get(key);
+  if (!subscribers || subscribers.size === 0) return;
+
+  // Check for infinite loops
+  tracker.updateDepth++;
+  if (tracker.updateDepth > MAX_RECURSION_DEPTH) {
+    tracker.updateDepth = 0;
+    throw SandboxError.recursionLimit(MAX_RECURSION_DEPTH);
+  }
+
+  debug.log(`Notifying ${subscribers.size} subscribers for key: ${key}`);
+
+  // Collect and run callbacks
+  const callbacksToRun: Array<() => void> = [];
+  for (const subscriberId of subscribers) {
+    const callback = tracker.callbacks.get(subscriberId);
+    if (callback) {
+      callbacksToRun.push(callback);
+    }
+  }
+
+  // Run callbacks outside the loop to avoid modification during iteration
+  for (const callback of callbacksToRun) {
+    try {
+      callback();
+    } catch (error) {
+      console.error('Error in subscriber callback:', error);
+    }
+  }
+
+  tracker.updateDepth--;
+}
+
+/**
+ * Remove a subscriber and its dependencies
+ */
+export function removeSubscriber(
+  tracker: DependencyTracker,
+  subscriberId: SubscriberId
+): void {
+  const deps = tracker.subscriberDeps.get(subscriberId);
+  if (deps) {
+    for (const key of deps) {
+      tracker.dependencies.get(key)?.delete(subscriberId);
+    }
+  }
+  tracker.subscriberDeps.delete(subscriberId);
+  tracker.callbacks.delete(subscriberId);
+}
+
+// ============================================================================
+// Reactive Proxy
+// ============================================================================
+
+/**
+ * Create a reactive proxy for state
+ */
+export function createReactiveProxy(
+  target: Record<string, RuntimeValue>,
+  options: ProxyOptions = {}
+): Record<string, RuntimeValue> {
+  const { onGet, onSet, types, readOnly } = options;
+
+  const handler: ProxyHandler<Record<string, RuntimeValue>> = {
+    get(obj, prop) {
+      if (typeof prop !== 'string') return Reflect.get(obj, prop);
+      
+      const value = obj[prop];
+      
+      // Track the dependency
+      if (onGet) {
+        onGet(prop);
+      }
+
+      // If value is an object or array, wrap it in a proxy too
+      if (value !== null && typeof value === 'object') {
+        return createNestedProxy(value, prop, options);
+      }
+
+      return value;
+    },
+
+    set(obj, prop, value) {
+      if (typeof prop !== 'string') return Reflect.set(obj, prop, value);
+      
+      if (readOnly) {
+        throw StateError.readOnlyComputed(prop);
+      }
+
+      const oldValue = obj[prop];
+      
+      // Type validation if types are defined
+      if (types?.has(prop)) {
+        const expectedType = types.get(prop)!;
+        if (!validateType(value, expectedType)) {
+          throw StateError.typeMismatch(prop, expectedType, typeof value);
+        }
+      }
+
+      // Set the value
+      obj[prop] = value as RuntimeValue;
+
+      // Notify if changed
+      if (onSet && !valuesEqual(oldValue, value as RuntimeValue)) {
+        onSet(prop, value as RuntimeValue, oldValue);
+      }
+
+      return true;
+    },
+
+    deleteProperty(obj, prop) {
+      if (typeof prop !== 'string') return Reflect.deleteProperty(obj, prop);
+      
+      if (readOnly) {
+        throw StateError.readOnlyComputed(prop);
+      }
+
+      const oldValue = obj[prop];
+      delete obj[prop];
+
+      if (onSet && oldValue !== undefined) {
+        onSet(prop, undefined, oldValue);
+      }
+
+      return true;
+    },
+
+    has(obj, prop) {
+      return Reflect.has(obj, prop);
+    },
+
+    ownKeys(obj) {
+      return Reflect.ownKeys(obj);
+    },
+
+    getOwnPropertyDescriptor(obj, prop) {
+      return Reflect.getOwnPropertyDescriptor(obj, prop);
+    },
+  };
+
+  return new Proxy(target, handler);
+}
+
+/**
+ * Create a nested proxy for objects and arrays within state
+ */
+function createNestedProxy(
+  target: RuntimeValue,
+  parentKey: string,
+  options: ProxyOptions
+): RuntimeValue {
+  if (target === null || typeof target !== 'object') {
+    return target;
+  }
+
+  const { onGet, onSet, readOnly } = options;
+
+  const handler: ProxyHandler<object> = {
+    get(obj, prop) {
+      if (typeof prop !== 'string' && typeof prop !== 'number') {
+        return Reflect.get(obj, prop);
+      }
+
+      const value = Reflect.get(obj, prop);
+
+      // Track nested access
+      if (onGet) {
+        onGet(`${parentKey}.${String(prop)}`);
+      }
+
+      // Recursively proxy nested objects
+      if (value !== null && typeof value === 'object') {
+        return createNestedProxy(value, `${parentKey}.${String(prop)}`, options);
+      }
+
+      return value;
+    },
+
+    set(obj, prop, value) {
+      if (readOnly) {
+        throw StateError.readOnlyComputed(parentKey);
+      }
+
+      const oldValue = Reflect.get(obj, prop);
+      Reflect.set(obj, prop, value);
+
+      // Notify on the parent key when nested values change
+      if (onSet && !valuesEqual(oldValue as RuntimeValue, value as RuntimeValue)) {
+        onSet(parentKey, undefined as unknown as RuntimeValue, undefined as RuntimeValue);
+      }
+
+      return true;
+    },
+
+    deleteProperty(obj, prop) {
+      if (readOnly) {
+        throw StateError.readOnlyComputed(parentKey);
+      }
+
+      Reflect.deleteProperty(obj, prop);
+
+      if (onSet) {
+        onSet(parentKey, undefined as unknown as RuntimeValue, undefined as RuntimeValue);
+      }
+
+      return true;
+    },
+  };
+
+  return new Proxy(target as object, handler) as RuntimeValue;
+}
+
+// ============================================================================
+// Utility Functions
+// ============================================================================
+
+function validateType(value: unknown, expectedType: string): boolean {
+  switch (expectedType) {
+    case 'string':
+      return typeof value === 'string';
+    case 'number':
+      return typeof value === 'number';
+    case 'boolean':
+      return typeof value === 'boolean';
+    case 'list':
+      return Array.isArray(value);
+    case 'object':
+      return value !== null && typeof value === 'object' && !Array.isArray(value);
+    default:
+      return true;
+  }
+}
+
+function valuesEqual(a: RuntimeValue, b: RuntimeValue): boolean {
+  if (a === b) return true;
+  if (a === null || b === null) return a === b;
+  if (a === undefined || b === undefined) return a === b;
+  
+  if (typeof a !== typeof b) return false;
+  if (typeof a !== 'object') return a === b;
+  
+  // For objects and arrays, do a shallow comparison
+  // Deep comparison could be expensive for large objects
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    return a.every((val, i) => val === b[i]);
+  }
+  
+  const keysA = Object.keys(a as object);
+  const keysB = Object.keys(b as object);
+  
+  if (keysA.length !== keysB.length) return false;
+  
+  return keysA.every(
+    (key) => (a as Record<string, unknown>)[key] === (b as Record<string, unknown>)[key]
+  );
+}
+
+/**
+ * Create a read-only proxy that throws on write attempts
+ */
+export function createReadOnlyProxy<T extends object>(target: T): T {
+  return new Proxy(target, {
+    set() {
+      throw new Error('Cannot modify read-only object');
+    },
+    deleteProperty() {
+      throw new Error('Cannot delete from read-only object');
+    },
+  });
+}
+
+/**
+ * Unwrap a proxy to get the raw target
+ * Note: This only works with our own proxies that store the target
+ */
+export function unwrapProxy<T>(proxy: T): T {
+  // In a real implementation, we'd need to track the mapping
+  // For now, just return as-is
+  return proxy;
+}
+```
+
+`nexus-reactor/src/state/subscriber.ts`:
+
+```ts
+/**
+ * @nexus/reactor - Subscriber Management
+ * 
+ * Manages reactive subscriptions and dependency tracking.
+ */
+
+import type { StateKey, SubscriberId, Subscriber } from '../core/types';
+import { generateId } from '../utils/debug';
+
+// ============================================================================
+// Types
+// ============================================================================
+
+export interface SubscriptionManager {
+  /** All active subscribers */
+  subscribers: Map<SubscriberId, Subscriber>;
+  /** State key -> subscribers that depend on it */
+  keyToSubscribers: Map<StateKey, Set<SubscriberId>>;
+  /** Subscriber -> state keys it depends on */
+  subscriberToKeys: Map<SubscriberId, Set<StateKey>>;
+  /** Currently tracking subscriber (for dependency collection) */
+  currentSubscriber: SubscriberId | null;
+  /** Pending notifications (for batching) */
+  pendingNotifications: Set<SubscriberId>;
+  /** Whether we're currently in a batch */
+  isBatching: boolean;
+}
+
+// ============================================================================
+// Factory
+// ============================================================================
+
+/**
+ * Create a new subscription manager
+ */
+export function createSubscriptionManager(): SubscriptionManager {
+  return {
+    subscribers: new Map(),
+    keyToSubscribers: new Map(),
+    subscriberToKeys: new Map(),
+    currentSubscriber: null,
+    pendingNotifications: new Set(),
+    isBatching: false,
+  };
+}
+
+// ============================================================================
+// Subscription Operations
+// ============================================================================
+
+/**
+ * Create a new subscriber
+ */
+export function subscribe(
+  manager: SubscriptionManager,
+  callback: () => void,
+  id?: string
+): SubscriberId {
+  const subscriberId = id ?? generateId('sub');
+  
+  const subscriber: Subscriber = {
+    id: subscriberId,
+    callback,
+    dependencies: new Set(),
+  };
+  
+  manager.subscribers.set(subscriberId, subscriber);
+  manager.subscriberToKeys.set(subscriberId, new Set());
+  
+  return subscriberId;
+}
+
+/**
+ * Remove a subscriber
+ */
+export function unsubscribe(
+  manager: SubscriptionManager,
+  subscriberId: SubscriberId
+): void {
+  // Remove from all key mappings
+  const keys = manager.subscriberToKeys.get(subscriberId);
+  if (keys) {
+    for (const key of keys) {
+      manager.keyToSubscribers.get(key)?.delete(subscriberId);
+    }
+  }
+  
+  manager.subscribers.delete(subscriberId);
+  manager.subscriberToKeys.delete(subscriberId);
+  manager.pendingNotifications.delete(subscriberId);
+}
+
+/**
+ * Start tracking dependencies for a subscriber
+ * Call this before running the subscriber's callback
+ */
+export function startTracking(
+  manager: SubscriptionManager,
+  subscriberId: SubscriberId
+): void {
+  // Clear existing dependencies
+  const oldKeys = manager.subscriberToKeys.get(subscriberId);
+  if (oldKeys) {
+    for (const key of oldKeys) {
+      manager.keyToSubscribers.get(key)?.delete(subscriberId);
+    }
+    oldKeys.clear();
+  }
+  
+  manager.currentSubscriber = subscriberId;
+}
+
+/**
+ * Stop tracking dependencies
+ */
+export function stopTracking(manager: SubscriptionManager): void {
+  manager.currentSubscriber = null;
+}
+
+/**
+ * Record that the current subscriber depends on a state key
+ */
+export function recordAccess(manager: SubscriptionManager, key: StateKey): void {
+  const subscriberId = manager.currentSubscriber;
+  if (!subscriberId) return;
+  
+  // Add key -> subscriber mapping
+  if (!manager.keyToSubscribers.has(key)) {
+    manager.keyToSubscribers.set(key, new Set());
+  }
+  manager.keyToSubscribers.get(key)!.add(subscriberId);
+  
+  // Add subscriber -> key mapping
+  const subscriberKeys = manager.subscriberToKeys.get(subscriberId);
+  if (subscriberKeys) {
+    subscriberKeys.add(key);
+  }
+  
+  // Update subscriber's dependencies set
+  const subscriber = manager.subscribers.get(subscriberId);
+  if (subscriber) {
+    subscriber.dependencies.add(key);
+  }
+}
+
+/**
+ * Notify all subscribers that depend on a key
+ */
+export function notify(manager: SubscriptionManager, key: StateKey): void {
+  const subscribers = manager.keyToSubscribers.get(key);
+  if (!subscribers || subscribers.size === 0) return;
+  
+  if (manager.isBatching) {
+    // Queue for later
+    for (const subscriberId of subscribers) {
+      manager.pendingNotifications.add(subscriberId);
+    }
+  } else {
+    // Notify immediately
+    runSubscribers(manager, subscribers);
+  }
+}
+
+/**
+ * Run a set of subscribers
+ */
+function runSubscribers(
+  manager: SubscriptionManager,
+  subscriberIds: Set<SubscriberId> | SubscriberId[]
+): void {
+  const ids = subscriberIds instanceof Set ? Array.from(subscriberIds) : subscriberIds;
+  
+  for (const subscriberId of ids) {
+    const subscriber = manager.subscribers.get(subscriberId);
+    if (subscriber) {
+      try {
+        subscriber.callback();
+      } catch (error) {
+        console.error(`Error in subscriber ${subscriberId}:`, error);
+      }
+    }
+  }
+}
+
+// ============================================================================
+// Batching
+// ============================================================================
+
+/**
+ * Start batching notifications
+ */
+export function startBatch(manager: SubscriptionManager): void {
+  manager.isBatching = true;
+}
+
+/**
+ * End batching and flush pending notifications
+ */
+export function endBatch(manager: SubscriptionManager): void {
+  manager.isBatching = false;
+  
+  if (manager.pendingNotifications.size > 0) {
+    const pending = new Set(manager.pendingNotifications);
+    manager.pendingNotifications.clear();
+    runSubscribers(manager, pending);
+  }
+}
+
+/**
+ * Run a function with batching enabled
+ */
+export function batch<T>(
+  manager: SubscriptionManager,
+  fn: () => T
+): T {
+  const wasBatching = manager.isBatching;
+  manager.isBatching = true;
+  
+  try {
+    return fn();
+  } finally {
+    if (!wasBatching) {
+      endBatch(manager);
+    }
+  }
+}
+
+// ============================================================================
+// Utilities
+// ============================================================================
+
+/**
+ * Get all subscribers that depend on a key
+ */
+export function getSubscribersForKey(
+  manager: SubscriptionManager,
+  key: StateKey
+): SubscriberId[] {
+  return Array.from(manager.keyToSubscribers.get(key) ?? []);
+}
+
+/**
+ * Get all keys that a subscriber depends on
+ */
+export function getKeysForSubscriber(
+  manager: SubscriptionManager,
+  subscriberId: SubscriberId
+): StateKey[] {
+  return Array.from(manager.subscriberToKeys.get(subscriberId) ?? []);
+}
+
+/**
+ * Check if a subscriber depends on a specific key
+ */
+export function dependsOn(
+  manager: SubscriptionManager,
+  subscriberId: SubscriberId,
+  key: StateKey
+): boolean {
+  const keys = manager.subscriberToKeys.get(subscriberId);
+  return keys?.has(key) ?? false;
+}
+
+/**
+ * Get the count of active subscribers
+ */
+export function getSubscriberCount(manager: SubscriptionManager): number {
+  return manager.subscribers.size;
+}
+
+/**
+ * Clear all subscribers
+ */
+export function clearAll(manager: SubscriptionManager): void {
+  manager.subscribers.clear();
+  manager.keyToSubscribers.clear();
+  manager.subscriberToKeys.clear();
+  manager.pendingNotifications.clear();
+  manager.currentSubscriber = null;
+}
+
+/**
+ * Create a reactive effect that runs immediately and re-runs when dependencies change
+ */
+export function effect(
+  manager: SubscriptionManager,
+  fn: () => void | (() => void),
+  id?: string
+): () => void {
+  let cleanup: (() => void) | void;
+  
+  const subscriberId = subscribe(manager, () => {
+    // Run cleanup from previous execution
+    if (cleanup) {
+      cleanup();
+    }
+    
+    // Track dependencies and run effect
+    startTracking(manager, subscriberId);
+    try {
+      cleanup = fn();
+    } finally {
+      stopTracking(manager);
+    }
+  }, id);
+  
+  // Run immediately
+  startTracking(manager, subscriberId);
+  try {
+    cleanup = fn();
+  } finally {
+    stopTracking(manager);
+  }
+  
+  // Return unsubscribe function
+  return () => {
+    if (cleanup) {
+      cleanup();
+    }
+    unsubscribe(manager, subscriberId);
+  };
+}
+
+/**
+ * Watch specific keys and run callback when they change
+ */
+export function watch(
+  manager: SubscriptionManager,
+  keys: StateKey[],
+  callback: (changedKey: StateKey) => void
+): () => void {
+  const subscriberId = subscribe(manager, () => {
+    // This won't be called with the key, so we need a different approach
+    callback(keys[0]); // Simplified - in practice, you'd track which key changed
+  });
+  
+  // Manually register the key dependencies
+  for (const key of keys) {
+    if (!manager.keyToSubscribers.has(key)) {
+      manager.keyToSubscribers.set(key, new Set());
+    }
+    manager.keyToSubscribers.get(key)!.add(subscriberId);
+    
+    const subscriberKeys = manager.subscriberToKeys.get(subscriberId);
+    if (subscriberKeys) {
+      subscriberKeys.add(key);
+    }
+  }
+  
+  return () => unsubscribe(manager, subscriberId);
+}
+```
+
+`nexus-reactor/src/utils/coercion.ts`:
+
+```ts
+/**
+ * @nexus/reactor - Type Coercion Utilities
+ * 
+ * Utilities for coercing values between NXML types.
+ */
+
+import type { NXMLPrimitiveType, RuntimeValue } from '../core/types';
+import { DEFAULT_VALUES, TRUTHY_STRINGS, FALSY_STRINGS } from '../core/constants';
+
+/**
+ * Get the default value for an NXML type
+ */
+export function getDefaultForType(type: NXMLPrimitiveType): RuntimeValue {
+  switch (type) {
+    case 'string':
+      return '';
+    case 'number':
+      return 0;
+    case 'boolean':
+      return false;
+    case 'list':
+      return [];
+    case 'object':
+      return {};
+    default:
+      return undefined;
+  }
+}
+
+/**
+ * Parse a default value string to the appropriate runtime type
+ * Used when parsing NXML default attributes
+ */
+export function parseDefaultValue(
+  value: string | undefined,
+  type: NXMLPrimitiveType
+): RuntimeValue {
+  if (value === undefined || value === '') {
+    return getDefaultForType(type);
+  }
+
+  switch (type) {
+    case 'string':
+      return value;
+
+    case 'number': {
+      const num = Number(value);
+      return isNaN(num) ? 0 : num;
+    }
+
+    case 'boolean': {
+      const lower = value.toLowerCase().trim();
+      if (TRUTHY_STRINGS.includes(lower)) return true;
+      if (FALSY_STRINGS.includes(lower)) return false;
+      return Boolean(value);
+    }
+
+    case 'list': {
+      try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [parsed];
+      } catch {
+        // If not valid JSON, try to parse as comma-separated
+        if (value.includes(',')) {
+          return value.split(',').map((s) => s.trim());
+        }
+        return [];
+      }
+    }
+
+    case 'object': {
+      try {
+        const parsed = JSON.parse(value);
+        return typeof parsed === 'object' && parsed !== null ? parsed : {};
+      } catch {
+        return {};
+      }
+    }
+
+    default:
+      return value;
+  }
+}
+
+/**
+ * Coerce a runtime value to a specific type
+ */
+export function coerceToType(
+  value: unknown,
+  type: NXMLPrimitiveType
+): RuntimeValue {
+  if (value === undefined || value === null) {
+    return getDefaultForType(type);
+  }
+
+  switch (type) {
+    case 'string':
+      return coerceToString(value);
+
+    case 'number':
+      return coerceToNumber(value);
+
+    case 'boolean':
+      return coerceToBoolean(value);
+
+    case 'list':
+      return coerceToList(value);
+
+    case 'object':
+      return coerceToObject(value);
+
+    default:
+      return value as RuntimeValue;
+  }
+}
+
+/**
+ * Coerce value to string
+ */
+export function coerceToString(value: unknown): string {
+  if (typeof value === 'string') return value;
+  if (value === null || value === undefined) return '';
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+}
+
+/**
+ * Coerce value to number
+ */
+export function coerceToNumber(value: unknown): number {
+  if (typeof value === 'number') return isNaN(value) ? 0 : value;
+  if (typeof value === 'string') {
+    const num = Number(value);
+    return isNaN(num) ? 0 : num;
+  }
+  if (typeof value === 'boolean') return value ? 1 : 0;
+  return 0;
+}
+
+/**
+ * Coerce value to boolean
+ */
+export function coerceToBoolean(value: unknown): boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    const lower = value.toLowerCase().trim();
+    if (TRUTHY_STRINGS.includes(lower)) return true;
+    if (FALSY_STRINGS.includes(lower)) return false;
+  }
+  return Boolean(value);
+}
+
+/**
+ * Coerce value to list (array)
+ */
+export function coerceToList(value: unknown): RuntimeValue[] {
+  if (Array.isArray(value)) return value as RuntimeValue[];
+  if (value === null || value === undefined) return [];
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [parsed];
+    } catch {
+      return [value];
+    }
+  }
+  return [value as RuntimeValue];
+}
+
+/**
+ * Coerce value to object
+ */
+export function coerceToObject(
+  value: unknown
+): Record<string, RuntimeValue> {
+  if (value === null || value === undefined) return {};
+  if (typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, RuntimeValue>;
+  }
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      if (typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed;
+      }
+    } catch {
+      // Not valid JSON
+    }
+  }
+  return {};
+}
+
+/**
+ * Validate that a value matches an NXML type
+ */
+export function validateValueType(
+  value: unknown,
+  type: NXMLPrimitiveType
+): boolean {
+  switch (type) {
+    case 'string':
+      return typeof value === 'string';
+    case 'number':
+      return typeof value === 'number' && !isNaN(value);
+    case 'boolean':
+      return typeof value === 'boolean';
+    case 'list':
+      return Array.isArray(value);
+    case 'object':
+      return (
+        typeof value === 'object' &&
+        value !== null &&
+        !Array.isArray(value)
+      );
+    default:
+      return true;
+  }
+}
+
+/**
+ * Get the NXML type of a runtime value
+ */
+export function getValueType(value: unknown): NXMLPrimitiveType | 'unknown' {
+  if (value === null || value === undefined) return 'unknown';
+  if (typeof value === 'string') return 'string';
+  if (typeof value === 'number') return 'number';
+  if (typeof value === 'boolean') return 'boolean';
+  if (Array.isArray(value)) return 'list';
+  if (typeof value === 'object') return 'object';
+  return 'unknown';
+}
+
+/**
+ * Deep clone a runtime value
+ */
+export function cloneValue(value: RuntimeValue): RuntimeValue {
+  if (value === null || value === undefined) return value;
+  if (typeof value !== 'object') return value;
+  
+  if (Array.isArray(value)) {
+    return value.map(cloneValue);
+  }
+  
+  const clone: Record<string, RuntimeValue> = {};
+  for (const [key, val] of Object.entries(value)) {
+    clone[key] = cloneValue(val);
+  }
+  return clone;
+}
+
+/**
+ * Deep compare two runtime values for equality
+ */
+export function valuesEqual(a: RuntimeValue, b: RuntimeValue): boolean {
+  if (a === b) return true;
+  if (a === null || b === null) return a === b;
+  if (a === undefined || b === undefined) return a === b;
+  
+  const typeA = typeof a;
+  const typeB = typeof b;
+  
+  if (typeA !== typeB) return false;
+  
+  if (typeA !== 'object') return a === b;
+  
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  
+  if (Array.isArray(a) && Array.isArray(b)) {
+    if (a.length !== b.length) return false;
+    return a.every((val, i) => valuesEqual(val, b[i]));
+  }
+  
+  const keysA = Object.keys(a as Record<string, RuntimeValue>);
+  const keysB = Object.keys(b as Record<string, RuntimeValue>);
+  
+  if (keysA.length !== keysB.length) return false;
+  
+  return keysA.every((key) =>
+    valuesEqual(
+      (a as Record<string, RuntimeValue>)[key],
+      (b as Record<string, RuntimeValue>)[key]
+    )
+  );
+}
+
+/**
+ * Merge two objects shallowly
+ */
+export function mergeObjects(
+  target: Record<string, RuntimeValue>,
+  source: Record<string, RuntimeValue>
+): Record<string, RuntimeValue> {
+  return { ...target, ...source };
+}
+
+/**
+ * Merge two objects deeply
+ */
+export function deepMergeObjects(
+  target: Record<string, RuntimeValue>,
+  source: Record<string, RuntimeValue>
+): Record<string, RuntimeValue> {
+  const result = { ...target };
+  
+  for (const [key, value] of Object.entries(source)) {
+    if (
+      value !== null &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      key in result &&
+      typeof result[key] === 'object' &&
+      result[key] !== null &&
+      !Array.isArray(result[key])
+    ) {
+      result[key] = deepMergeObjects(
+        result[key] as Record<string, RuntimeValue>,
+        value as Record<string, RuntimeValue>
+      );
+    } else {
+      result[key] = cloneValue(value);
+    }
+  }
+  
+  return result;
+}
+```
+
+`nexus-reactor/src/utils/debug.ts`:
+
+```ts
+/**
+ * @nexus/reactor - Debug Utilities
+ * 
+ * Debugging, logging, and inspection utilities.
+ */
+
+/**
+ * Debug configuration
+ */
+let debugEnabled = false;
+let debugPrefix = '[Nexus]';
+
+/**
+ * Enable or disable debug mode
+ */
+export function setDebugMode(enabled: boolean, prefix?: string): void {
+  debugEnabled = enabled;
+  if (prefix) debugPrefix = prefix;
+}
+
+/**
+ * Check if debug mode is enabled
+ */
+export function isDebugEnabled(): boolean {
+  return debugEnabled;
+}
+
+/**
+ * Log a debug message (only when debug mode is enabled)
+ */
+export function debug(message: string, ...args: unknown[]): void {
+  if (debugEnabled) {
+    console.log(`${debugPrefix} ${message}`, ...args);
+  }
+}
+
+/**
+ * Log a debug warning
+ */
+export function debugWarn(message: string, ...args: unknown[]): void {
+  if (debugEnabled) {
+    console.warn(`${debugPrefix} ${message}`, ...args);
+  }
+}
+
+/**
+ * Log a debug error
+ */
+export function debugError(message: string, ...args: unknown[]): void {
+  if (debugEnabled) {
+    console.error(`${debugPrefix} ${message}`, ...args);
+  }
+}
+
+/**
+ * Create a scoped debugger
+ */
+export function createDebugger(scope: string) {
+  const scopedPrefix = `${debugPrefix}[${scope}]`;
+  
+  return {
+    log: (message: string, ...args: unknown[]) => {
+      if (debugEnabled) {
+        console.log(`${scopedPrefix} ${message}`, ...args);
+      }
+    },
+    warn: (message: string, ...args: unknown[]) => {
+      if (debugEnabled) {
+        console.warn(`${scopedPrefix} ${message}`, ...args);
+      }
+    },
+    error: (message: string, ...args: unknown[]) => {
+      if (debugEnabled) {
+        console.error(`${scopedPrefix} ${message}`, ...args);
+      }
+    },
+    time: (label: string) => {
+      if (debugEnabled) {
+        console.time(`${scopedPrefix} ${label}`);
+      }
+    },
+    timeEnd: (label: string) => {
+      if (debugEnabled) {
+        console.timeEnd(`${scopedPrefix} ${label}`);
+      }
+    },
+    group: (label: string) => {
+      if (debugEnabled) {
+        console.group(`${scopedPrefix} ${label}`);
+      }
+    },
+    groupEnd: () => {
+      if (debugEnabled) {
+        console.groupEnd();
+      }
+    },
+  };
+}
+
+/**
+ * Performance measurement utility
+ */
+export class PerformanceTracker {
+  private marks: Map<string, number>;
+  private measures: Map<string, number[]>;
+
+  constructor() {
+    this.marks = new Map();
+    this.measures = new Map();
+  }
+
+  /**
+   * Mark a point in time
+   */
+  mark(name: string): void {
+    this.marks.set(name, performance.now());
+  }
+
+  /**
+   * Measure time between two marks
+   */
+  measure(name: string, startMark: string, endMark?: string): number {
+    const start = this.marks.get(startMark);
+    const end = endMark ? this.marks.get(endMark) : performance.now();
+
+    if (start === undefined) {
+      console.warn(`Start mark "${startMark}" not found`);
+      return 0;
+    }
+
+    const duration = (end ?? performance.now()) - start;
+
+    if (!this.measures.has(name)) {
+      this.measures.set(name, []);
+    }
+    this.measures.get(name)!.push(duration);
+
+    return duration;
+  }
+
+  /**
+   * Get statistics for a measurement
+   */
+  getStats(name: string): MeasureStats | null {
+    const durations = this.measures.get(name);
+    if (!durations || durations.length === 0) return null;
+
+    const sorted = [...durations].sort((a, b) => a - b);
+    const sum = sorted.reduce((a, b) => a + b, 0);
+
+    return {
+      count: sorted.length,
+      min: sorted[0],
+      max: sorted[sorted.length - 1],
+      avg: sum / sorted.length,
+      median: sorted[Math.floor(sorted.length / 2)],
+      total: sum,
+    };
+  }
+
+  /**
+   * Get all measurement statistics
+   */
+  getAllStats(): Record<string, MeasureStats> {
+    const stats: Record<string, MeasureStats> = {};
+    for (const name of this.measures.keys()) {
+      const s = this.getStats(name);
+      if (s) stats[name] = s;
+    }
+    return stats;
+  }
+
+  /**
+   * Clear all marks and measures
+   */
+  clear(): void {
+    this.marks.clear();
+    this.measures.clear();
+  }
+
+  /**
+   * Log all stats to console
+   */
+  logStats(): void {
+    const stats = this.getAllStats();
+    console.table(stats);
+  }
+}
+
+export interface MeasureStats {
+  count: number;
+  min: number;
+  max: number;
+  avg: number;
+  median: number;
+  total: number;
+}
+
+/**
+ * Create a timer for measuring execution time
+ */
+export function createTimer(): Timer {
+  const start = performance.now();
+  return {
+    elapsed: () => performance.now() - start,
+    log: (label: string) => {
+      if (debugEnabled) {
+        console.log(`${debugPrefix} ${label}: ${(performance.now() - start).toFixed(2)}ms`);
+      }
+    },
+  };
+}
+
+export interface Timer {
+  elapsed: () => number;
+  log: (label: string) => void;
+}
+
+/**
+ * Format an object for display
+ */
+export function inspect(obj: unknown, depth = 2): string {
+  return JSON.stringify(
+    obj,
+    (key, value) => {
+      if (typeof value === 'function') {
+        return `[Function: ${value.name || 'anonymous'}]`;
+      }
+      if (value instanceof Error) {
+        return {
+          name: value.name,
+          message: value.message,
+          stack: value.stack,
+        };
+      }
+      return value;
+    },
+    2
+  );
+}
+
+/**
+ * Truncate a string for display
+ */
+export function truncate(str: string, maxLength = 100): string {
+  if (str.length <= maxLength) return str;
+  return str.slice(0, maxLength - 3) + '...';
+}
+
+/**
+ * Format bytes for display
+ */
+export function formatBytes(bytes: number): string {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
+}
+
+/**
+ * Format milliseconds for display
+ */
+export function formatMs(ms: number): string {
+  if (ms < 1) return `${(ms * 1000).toFixed(2)}µs`;
+  if (ms < 1000) return `${ms.toFixed(2)}ms`;
+  return `${(ms / 1000).toFixed(2)}s`;
+}
+
+/**
+ * Assert a condition (throws in debug mode)
+ */
+export function assert(condition: boolean, message: string): asserts condition {
+  if (!condition) {
+    const error = new Error(`Assertion failed: ${message}`);
+    if (debugEnabled) {
+      throw error;
+    } else {
+      console.error(error);
+    }
+  }
+}
+
+/**
+ * Create a deferred promise for testing
+ */
+export function createDeferred<T>(): Deferred<T> {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  
+  return { promise, resolve, reject };
+}
+
+export interface Deferred<T> {
+  promise: Promise<T>;
+  resolve: (value: T) => void;
+  reject: (reason?: unknown) => void;
+}
+
+/**
+ * Generate a unique ID
+ */
+export function generateId(prefix = 'id'): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+/**
+ * Throttle a function
+ */
+export function throttle<T extends (...args: unknown[]) => unknown>(
+  fn: T,
+  limit: number
+): T {
+  let lastCall = 0;
+  return ((...args: unknown[]) => {
+    const now = Date.now();
+    if (now - lastCall >= limit) {
+      lastCall = now;
+      return fn(...args);
+    }
+  }) as T;
+}
+
+/**
+ * Debounce a function
+ */
+export function debounce<T extends (...args: unknown[]) => unknown>(
+  fn: T,
+  delay: number
+): T {
+  let timeoutId: ReturnType<typeof setTimeout>;
+  return ((...args: unknown[]) => {
+    clearTimeout(timeoutId);
+    timeoutId = setTimeout(() => fn(...args), delay);
+  }) as T;
+}
+```
+
+`nexus-reactor/src/utils/expression.ts`:
+
+```ts
+/**
+ * @nexus/reactor - Expression Utilities
+ * 
+ * Safe expression evaluation and binding resolution.
+ */
+
+import { BINDING_PATTERN, STATE_REF_PATTERN, SCOPE_REF_PATTERN } from '../core/constants';
+import type { RuntimeValue, BindingExpression, Expression } from '../core/types';
+
+/**
+ * Check if a value is a binding expression: {expression}
+ */
+export function isBindingExpression(value: unknown): value is BindingExpression {
+  if (typeof value !== 'string') return false;
+  return BINDING_PATTERN.test(value.trim());
+}
+
+/**
+ * Extract the expression from a binding: "{$state.count}" -> "$state.count"
+ */
+export function extractExpression(binding: BindingExpression): Expression {
+  const match = binding.trim().match(BINDING_PATTERN);
+  return match ? match[1].trim() : binding;
+}
+
+/**
+ * Check if an expression references $state
+ */
+export function referencesState(expr: Expression): boolean {
+  return /\$state\b/.test(expr);
+}
+
+/**
+ * Check if an expression references $scope
+ */
+export function referencesScope(expr: Expression): boolean {
+  return /\$scope\b/.test(expr);
+}
+
+/**
+ * Extract state variable names from an expression
+ * "$state.count + $state.total" -> ["count", "total"]
+ */
+export function extractStateRefs(expr: Expression): string[] {
+  const refs: string[] = [];
+  const regex = new RegExp(STATE_REF_PATTERN.source, 'g');
+  let match;
+  
+  while ((match = regex.exec(expr)) !== null) {
+    if (!refs.includes(match[1])) {
+      refs.push(match[1]);
+    }
+  }
+  
+  return refs;
+}
+
+/**
+ * Extract scope variable names from an expression
+ * "$scope.item.name + $scope.index" -> ["item.name", "index"]
+ */
+export function extractScopeRefs(expr: Expression): string[] {
+  const refs: string[] = [];
+  const regex = new RegExp(SCOPE_REF_PATTERN.source, 'g');
+  let match;
+  
+  while ((match = regex.exec(expr)) !== null) {
+    if (!refs.includes(match[1])) {
+      refs.push(match[1]);
+    }
+  }
+  
+  return refs;
+}
+
+/**
+ * Safely evaluate an expression with given context
+ * This uses Function constructor but with a restricted context
+ */
+export function evaluateExpression(
+  expr: Expression,
+  context: {
+    $state?: Record<string, RuntimeValue>;
+    $scope?: Record<string, unknown>;
+  }
+): unknown {
+  try {
+    // Create a safe evaluation function
+    const fn = new Function(
+      '$state',
+      '$scope',
+      `"use strict"; return (${expr});`
+    );
+    
+    return fn(context.$state ?? {}, context.$scope ?? {});
+  } catch (error) {
+    console.error(`Error evaluating expression "${expr}":`, error);
+    return undefined;
+  }
+}
+
+/**
+ * Resolve a binding expression to its value
+ */
+export function resolveBinding(
+  binding: BindingExpression | string,
+  context: {
+    $state?: Record<string, RuntimeValue>;
+    $scope?: Record<string, unknown>;
+  }
+): unknown {
+  // If not a binding, return as-is
+  if (!isBindingExpression(binding)) {
+    return binding;
+  }
+  
+  const expr = extractExpression(binding);
+  return evaluateExpression(expr, context);
+}
+
+/**
+ * Resolve all bindings in a props object
+ */
+export function resolveBindings(
+  props: Record<string, unknown>,
+  context: {
+    $state?: Record<string, RuntimeValue>;
+    $scope?: Record<string, unknown>;
+  }
+): Record<string, unknown> {
+  const resolved: Record<string, unknown> = {};
+  
+  for (const [key, value] of Object.entries(props)) {
+    if (typeof value === 'string' && isBindingExpression(value)) {
+      resolved[key] = resolveBinding(value, context);
+    } else {
+      resolved[key] = value;
+    }
+  }
+  
+  return resolved;
+}
+
+/**
+ * Get a nested property from an object using dot notation
+ * getNestedValue({ a: { b: { c: 1 } } }, 'a.b.c') -> 1
+ */
+export function getNestedValue(obj: unknown, path: string): unknown {
+  if (!obj || typeof obj !== 'object') return undefined;
+  
+  const parts = path.split('.');
+  let current: unknown = obj;
+  
+  for (const part of parts) {
+    if (current === null || current === undefined) return undefined;
+    if (typeof current !== 'object') return undefined;
+    current = (current as Record<string, unknown>)[part];
+  }
+  
+  return current;
+}
+
+/**
+ * Set a nested property on an object using dot notation
+ * setNestedValue({}, 'a.b.c', 1) -> { a: { b: { c: 1 } } }
+ */
+export function setNestedValue(
+  obj: Record<string, unknown>,
+  path: string,
+  value: unknown
+): void {
+  const parts = path.split('.');
+  let current = obj;
+  
+  for (let i = 0; i < parts.length - 1; i++) {
+    const part = parts[i];
+    if (!(part in current) || typeof current[part] !== 'object') {
+      current[part] = {};
+    }
+    current = current[part] as Record<string, unknown>;
+  }
+  
+  current[parts[parts.length - 1]] = value;
+}
+
+/**
+ * Check if a binding expression references a specific state key
+ */
+export function bindingReferencesState(binding: string, stateKey: string): boolean {
+  if (!isBindingExpression(binding)) return false;
+  const expr = extractExpression(binding);
+  const refs = extractStateRefs(expr);
+  return refs.includes(stateKey);
+}
+
+/**
+ * Create an expression evaluator with pre-bound context
+ */
+export function createExpressionEvaluator(context: {
+  $state?: Record<string, RuntimeValue>;
+  $scope?: Record<string, unknown>;
+}) {
+  return (expr: Expression) => evaluateExpression(expr, context);
+}
+
+/**
+ * Parse args expression from binding
+ * "[$scope.item.id]" -> evaluated array
+ * "{ id: $scope.item.id }" -> evaluated object
+ */
+export function parseArgsExpression(
+  args: string | unknown,
+  context: {
+    $state?: Record<string, RuntimeValue>;
+    $scope?: Record<string, unknown>;
+  }
+): unknown {
+  if (typeof args !== 'string') return args;
+  
+  // If it's a binding expression, evaluate it
+  if (isBindingExpression(args)) {
+    return resolveBinding(args, context);
+  }
+  
+  // Try to parse as JSON-like expression
+  try {
+    // Replace $scope and $state references with context access
+    const processed = args
+      .replace(/\$scope\./g, 'context.$scope.')
+      .replace(/\$state\./g, 'context.$state.');
+    
+    const fn = new Function('context', `"use strict"; return (${processed});`);
+    return fn({ $state: context.$state, $scope: context.$scope });
+  } catch {
+    return args;
+  }
+}
+
+/**
+ * Interpolate string with bindings
+ * "Hello {$state.name}!" with $state.name = "World" -> "Hello World!"
+ */
+export function interpolateString(
+  template: string,
+  context: {
+    $state?: Record<string, RuntimeValue>;
+    $scope?: Record<string, unknown>;
+  }
+): string {
+  return template.replace(/\{([^}]+)\}/g, (match, expr) => {
+    const value = evaluateExpression(expr.trim(), context);
+    return value !== undefined && value !== null ? String(value) : '';
+  });
+}
+```
+
+`nexus-reactor/src/utils/index.ts`:
+
+```ts
+/**
+ * @nexus/reactor - Utilities Module
+ * 
+ * Exports all utility functions.
+ */
+
+export * from './expression';
+export * from './coercion';
+export * from './debug';
+```
