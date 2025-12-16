@@ -35,10 +35,10 @@ echo -e "${BLUE}[Kernel]${NC} Starting workspace-kernel on port 3000..."
     npm run dev 2>&1 | sed "s/^/[Kernel] /"
 ) &
 
-echo -e "${YELLOW}[Auth]${NC} Starting GraphStudio FastAPI backend on port 8000..."
+echo -e "${YELLOW}[NexusOS]${NC} Starting NexusOS mock service on port 4000..."
 (
-    cd apps/GraphStudio
-    python -m uvicorn backend.main:app --reload --port 8000 2>&1 | sed "s/^/[Auth] /"
+    cd services/nexus-os
+    npm run dev 2>&1 | sed "s/^/[NexusOS] /"
 ) &
 
 echo -e "${GREEN}[Frontend]${NC} Starting GraphStudio on port 5173..."
@@ -51,7 +51,7 @@ echo ""
 echo -e "${GREEN}✨ Development servers starting...${NC}"
 echo ""
 echo "  Kernel:   http://localhost:3000"
-echo "  Auth API: http://localhost:8000"
+echo "  NexusOS:  http://localhost:4000"
 echo "  Frontend: http://localhost:5173"
 echo ""
 echo "Press Ctrl+C to stop all servers"

@@ -87,10 +87,10 @@ export function createMarketplaceRouter(prisma: PrismaClient, jwtSecret: string)
           sort === 'popular'
             ? { installCount: 'desc' }
             : sort === 'recent'
-            ? { createdAt: 'desc' }
-            : sort === 'rating'
-            ? { averageRating: 'desc' }
-            : { name: 'asc' },
+              ? { createdAt: 'desc' }
+              : sort === 'rating'
+                ? { averageRating: 'desc' }
+                : { name: 'asc' },
       });
 
       res.json({ panels, count: panels.length });
@@ -173,6 +173,13 @@ export function createMarketplaceRouter(prisma: PrismaClient, jwtSecret: string)
         return;
       }
 
+      // Check if user exists (handle stale tokens after DB reset)
+      const user = await prisma.user.findUnique({ where: { id: userId } });
+      if (!user) {
+        res.status(401).json({ error: 'User not found. Please log out and log in again.' });
+        return;
+      }
+
       // Check if already installed
       const existing = await prisma.installation.findUnique({
         where: {
@@ -230,8 +237,8 @@ export function createMarketplaceRouter(prisma: PrismaClient, jwtSecret: string)
         message: 'Panel installed successfully',
       });
     } catch (error) {
-      console.error('Error installing panel:', error);
-      res.status(500).json({ error: 'Failed to install panel' });
+      console.error('Error installing panel:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+      res.status(500).json({ error: `Failed to install panel: ${error instanceof Error ? error.message : String(error)}` });
     }
   });
 
@@ -537,7 +544,8 @@ export function createMarketplaceRouter(prisma: PrismaClient, jwtSecret: string)
       });
 
       const formattedCategories = categories.map((cat) => ({
-        name: cat.category,
+        name: cat.category.charAt(0).toUpperCase() + cat.category.slice(1), // Capitalize for display
+        slug: cat.category,
         count: cat._count.id,
       }));
 

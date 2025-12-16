@@ -155,6 +155,7 @@ export class Server {
 
     // Panel CRUD
     this.app.post('/panels', this.handleCreatePanel.bind(this));
+    this.app.post('/panels/from-nxml', this.handleCreatePanelFromNXML.bind(this));
     this.app.get('/panels', this.handleListPanels.bind(this));
     this.app.get('/panels/:id', this.handleGetPanel.bind(this));
     this.app.get('/panels/:id/state', this.handleGetPanelState.bind(this));
@@ -729,6 +730,80 @@ export class Server {
       } else {
         throw err;
       }
+    }
+  }
+
+  private async handleCreatePanelFromNXML(req: Request, res: Response): Promise<void> {
+    try {
+      const { nxmlSource, initialState } = req.body;
+
+      if (!nxmlSource || typeof nxmlSource !== 'string') {
+        res.status(400).json({ error: 'nxmlSource is required and must be a string' });
+        return;
+      }
+
+      // Parse NXML to AST using nexus-reactor
+      const { parse: parseNXML } = await import('@nexus/reactor');
+      const ast = parseNXML(nxmlSource);
+
+      // Extract panel configuration from AST
+      // Generate a unique panel ID - if the base ID exists, append a unique suffix
+      const baseId = ast.meta.id || `panel-${Date.now()}`;
+      let panelId = baseId;
+      let counter = 1;
+      while (this.panelManager.hasPanel(panelId)) {
+        panelId = `${baseId}-${counter}`;
+        counter++;
+      }
+
+      // Convert tools from AST to panel config format
+      const tools = ast.logic.tools.map((tool: any) => ({
+        name: tool.name,
+        handler: tool.handler.code,
+        trigger: { type: 'manual' as const },
+        ...(tool.description && { description: tool.description }),
+      }));
+
+      // Build initial state from AST data section
+      const stateFromAST: Record<string, any> = {};
+      for (const state of ast.data.states) {
+        if (state.default !== undefined) {
+          stateFromAST[state.name] = state.default;
+        }
+      }
+
+      const panelConfig: Omit<PanelConfig, 'id'> & { id?: string } = {
+        kind: 'NexusPanel',
+        id: panelId,
+        title: ast.meta.title || panelId,
+        tools,
+        initialState: { ...stateFromAST, ...(initialState || {}) },
+        metadata: {
+          description: ast.meta.description,
+          version: ast.meta.version,
+          author: ast.meta.author,
+          tags: ast.meta.tags,
+        },
+      };
+
+      const panel = this.panelManager.createPanel(panelConfig);
+
+      const response: CreatePanelResponse = {
+        id: panel.config.id,
+        status: panel.status,
+        wsUrl: `ws://${req.headers.host}/panels/${panel.config.id}/ws`,
+      };
+
+      res.status(201).json(response);
+    } catch (err) {
+      logger.error(
+        { error: err instanceof Error ? err.message : String(err) },
+        'Failed to create panel from NXML'
+      );
+      res.status(500).json({
+        error: 'Failed to create panel from NXML',
+        message: err instanceof Error ? err.message : String(err),
+      });
     }
   }
 

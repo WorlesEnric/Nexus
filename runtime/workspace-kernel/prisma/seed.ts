@@ -49,7 +49,9 @@ async function seed() {
       tags: 'notes,productivity,text',
       installCount: 0,
     },
-    update: {},
+    update: {
+      nxmlSource: notesNXML, // Always update NXML source
+    },
   });
 
   // Create first version for Notes
@@ -66,7 +68,9 @@ async function seed() {
       nxmlSource: notesNXML,
       changelog: 'Initial version',
     },
-    update: {},
+    update: {
+      nxmlSource: notesNXML, // Always update NXML source
+    },
   });
 
   console.log(`✅ Created Notes panel: ${notesPanel.name}`);
@@ -90,7 +94,9 @@ async function seed() {
       tags: 'ai,chat,assistant',
       installCount: 0,
     },
-    update: {},
+    update: {
+      nxmlSource: chatNXML, // Always update NXML source
+    },
   });
 
   // Create first version for Chat
@@ -107,7 +113,9 @@ async function seed() {
       nxmlSource: chatNXML,
       changelog: 'Initial version',
     },
-    update: {},
+    update: {
+      nxmlSource: chatNXML, // Always update NXML source
+    },
   });
 
   console.log(`✅ Created Chat panel: ${chatPanel.name}`);

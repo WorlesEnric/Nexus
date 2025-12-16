@@ -75,6 +75,11 @@ echo ""
 log_info "[2/6] Installing GraphStudio dependencies..."
 cd ../../apps/GraphStudio
 npm install --silent
+# Install Python dependencies for backend
+if [ -f "backend/requirements.txt" ]; then
+    log_info "Installing GraphStudio backend dependencies..."
+    pip install -r backend/requirements.txt --quiet
+fi
 log_success "GraphStudio dependencies installed"
 echo ""
 
@@ -148,12 +153,15 @@ log_success "Created runtime/workspace-kernel/.env"
 cd ../../apps/GraphStudio
 cat > .env << EOF
 # API endpoints
-VITE_API_BASE_URL=http://localhost:8000
+VITE_API_BASE_URL=http://localhost:3000
 VITE_WS_URL=ws://localhost:3000
 
 # Features
 VITE_ENABLE_MARKETPLACE=true
 VITE_ENABLE_AI=true
+
+# Security (Shared with Kernel)
+JWT_SECRET="$JWT_SECRET"
 EOF
 log_success "Created apps/GraphStudio/.env"
 
