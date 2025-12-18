@@ -1149,6 +1149,10 @@ export class Server {
    * Start the server
    */
   async start(): Promise<void> {
+    // Connect to Prisma
+    await this.prisma.$connect();
+    logger.info('Database connected');
+
     return new Promise((resolve) => {
       this.httpServer.listen(this.config.httpPort, this.config.host, () => {
         logger.info(

@@ -2,10 +2,11 @@
 
 generator client {
   provider = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl-openssl-3.0.x", "linux-musl-arm64-openssl-3.0.x"]
 }
 
 datasource db {
-  provider = "sqlite"  // Use SQLite for development, can switch to PostgreSQL for production
+  provider = "postgresql"  // Use PostgreSQL for production
   url      = env("DATABASE_URL")
 }
 
