@@ -57,6 +57,8 @@ spec:
             configMapKeyRef:
               name: nexus-config
               key: OTEL_ENDPOINT
+        - name: WORKSPACE_KERNEL_URL
+          value: "http://workspace-kernel:8000"
         # From Secrets
         - name: JWT_SECRET_KEY
           valueFrom:
@@ -67,7 +69,7 @@ spec:
           valueFrom:
             secretKeyRef:
               name: nexus-secrets
-              key: DATABASE_URL
+              key: DATABASE_URL_SYNC
         resources:
           requests:
             memory: "256Mi"

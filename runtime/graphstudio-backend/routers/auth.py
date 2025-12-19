@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import OperationalError, SQLAlchemyError
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 import models
 import schemas
@@ -128,7 +129,14 @@ async def signup(user: schemas.UserCreate, db: Session = Depends(database.get_db
 
 @router.post("/token", response_model=schemas.Token)
 def login_for_access_token(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(database.get_db)):
-    user = db.query(models.User).filter(models.User.email == form_data.username).first()
+    try:
+        user = db.query(models.User).filter(models.User.email == form_data.username).first()
+    except (OperationalError, SQLAlchemyError) as e:
+        logger.error("database_error", error=str(e))
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Database connection error. Please try again later.",
+        )
 
     if not user:
         logger.warning("login_user_not_found", email=form_data.username)

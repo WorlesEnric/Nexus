@@ -7,7 +7,7 @@ metadata:
     app: nexus-state
     component: backend
 spec:
-  replicas: 2
+  replicas: 1
   selector:
     matchLabels:
       app: nexus-state
@@ -58,8 +58,7 @@ spec:
               name: nexus-config
               key: LOG_LEVEL
         # Database Configuration (async driver for nexus-state)
-        - name: DATABASE_URL
-          value: "postgresql+asyncpg://$(DATABASE_USER):$(DATABASE_PASSWORD)@$(DATABASE_HOST):$(DATABASE_PORT)/$(DATABASE_NAME)"
+        # Note: DATABASE_URL is constructed by the Python code from individual components
         - name: DATABASE_HOST
           valueFrom:
             configMapKeyRef:
@@ -179,7 +178,7 @@ metadata:
   namespace: nexus-python
 spec:
   accessModes:
-    - ReadWriteMany
+    - ReadWriteOnce
   resources:
     requests:
       storage: 10Gi

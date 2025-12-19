@@ -5,9 +5,7 @@ Provides design guidance, component suggestions, and layout recommendations.
 """
 
 from typing import Dict, Any, Optional, List
-from langchain_openai import ChatOpenAI
-from langchain_anthropic import ChatAnthropic
-from crewai import Agent, Task, Crew
+from openai import AsyncOpenAI
 
 
 class DesignAgent:
@@ -23,46 +21,22 @@ class DesignAgent:
         model_provider: str = "openai",
         model_name: str = "gpt-4",
         api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
         temperature: float = 0.7,
     ):
         """
         Initialize design agent.
 
         Args:
-            model_provider: LLM provider ("openai" or "anthropic")
+            model_provider: LLM provider
             model_name: Model name
             api_key: API key for LLM provider
+            base_url: Optional base URL for OpenAI-compatible API
             temperature: LLM temperature
         """
-        # Initialize LLM
-        if model_provider == "openai":
-            self.llm = ChatOpenAI(
-                model_name=model_name,
-                temperature=temperature,
-                api_key=api_key,
-            )
-        elif model_provider == "anthropic":
-            self.llm = ChatAnthropic(
-                model=model_name,
-                temperature=temperature,
-                api_key=api_key,
-            )
-        else:
-            raise ValueError(f"Unsupported model provider: {model_provider}")
-
-        # Create CrewAI agent
-        self.agent = Agent(
-            role="UI/UX Design Expert",
-            goal="Provide excellent design guidance for Nexus panels",
-            backstory=(
-                "You are a UI/UX design expert specializing in data visualization "
-                "and interactive interfaces. You understand design principles, "
-                "accessibility, and user experience best practices."
-            ),
-            verbose=True,
-            allow_delegation=False,
-            llm=self.llm,
-        )
+        self.model_name = model_name
+        self.temperature = temperature
+        self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
 
     async def suggest_layout(
         self,
@@ -100,21 +74,23 @@ Provide:
 
 Format the response as a structured JSON with sections and components."""
 
-        task = Task(
-            description=prompt,
-            agent=self.agent,
-            expected_output="Structured layout recommendation with component suggestions",
+        response = await self.client.chat.completions.create(
+            model=self.model_name,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a UI/UX design expert specializing in data visualization "
+                        "and interactive interfaces. You understand design principles, "
+                        "accessibility, and user experience best practices."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=self.temperature,
         )
 
-        crew = Crew(
-            agents=[self.agent],
-            tasks=[task],
-            verbose=True,
-        )
-
-        result = crew.kickoff()
-
-        return {"suggestion": str(result)}
+        return {"suggestion": response.choices[0].message.content}
 
     async def improve_design(
         self,
@@ -152,21 +128,19 @@ Provide an improved version with:
 
 Return the complete improved NXML panel."""
 
-        task = Task(
-            description=prompt,
-            agent=self.agent,
-            expected_output="Improved NXML panel with design enhancements",
+        response = await self.client.chat.completions.create(
+            model=self.model_name,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a UI/UX design expert specializing in panel design.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=self.temperature,
         )
 
-        crew = Crew(
-            agents=[self.agent],
-            tasks=[task],
-            verbose=True,
-        )
-
-        result = crew.kickoff()
-
-        return str(result)
+        return response.choices[0].message.content
 
     async def suggest_components(
         self,
@@ -202,21 +176,19 @@ Available Components:
 
 Suggest the most appropriate components and explain why."""
 
-        task = Task(
-            description=prompt,
-            agent=self.agent,
-            expected_output="List of recommended components with explanations",
+        response = await self.client.chat.completions.create(
+            model=self.model_name,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a UI/UX design expert.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=self.temperature,
         )
 
-        crew = Crew(
-            agents=[self.agent],
-            tasks=[task],
-            verbose=True,
-        )
-
-        result = crew.kickoff()
-
-        return [str(result)]
+        return [response.choices[0].message.content]
 
     async def review_accessibility(
         self,
@@ -250,18 +222,16 @@ Provide:
 - Severity (high, medium, low)
 - Specific recommendations for each issue"""
 
-        task = Task(
-            description=prompt,
-            agent=self.agent,
-            expected_output="Accessibility review with issues and recommendations",
+        response = await self.client.chat.completions.create(
+            model=self.model_name,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an accessibility expert.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=self.temperature,
         )
 
-        crew = Crew(
-            agents=[self.agent],
-            tasks=[task],
-            verbose=True,
-        )
-
-        result = crew.kickoff()
-
-        return {"review": str(result)}
+        return {"review": response.choices[0].message.content}

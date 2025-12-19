@@ -6,8 +6,6 @@ prompts for LLM consumption.
 """
 
 from typing import List, Dict, Any, Optional
-from langchain.docstore.document import Document
-from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 from nexus_core.nog import NOGGraph, NOGEntity, NOGRelationship, EntityType
 
@@ -15,89 +13,78 @@ from nexus_core.nog import NOGGraph, NOGEntity, NOGRelationship, EntityType
 class AIContextBuilder:
     """
     Builds AI context from NOG graphs for LLM prompts.
-    
+
     Converts NOG entities and relationships into structured natural language
     that can be used as context for code generation and analysis.
     """
-    
+
     def __init__(
         self,
         max_context_tokens: int = 8000,
-        chunk_size: int = 1000,
-        chunk_overlap: int = 200,
     ):
         """
         Initialize context builder.
-        
+
         Args:
             max_context_tokens: Maximum tokens for context
-            chunk_size: Size of text chunks
-            chunk_overlap: Overlap between chunks
         """
         self.max_context_tokens = max_context_tokens
-        self.text_splitter = RecursiveCharacterTextSplitter(
-            chunk_size=chunk_size,
-            chunk_overlap=chunk_overlap,
-            length_function=len,
-        )
     
     def build_context(
         self,
         graph: NOGGraph,
         focus_entity_id: Optional[str] = None,
         depth: int = 2,
-    ) -> List[Document]:
+    ) -> List[Dict[str, Any]]:
         """
-        Build LangChain documents from NOG graph.
-        
+        Build context documents from NOG graph.
+
         Args:
             graph: NOG graph
             focus_entity_id: Entity to focus on (extracts subgraph)
             depth: Depth of subgraph extraction
-            
+
         Returns:
-            List of LangChain documents
+            List of context documents (dicts with 'content' and 'metadata')
         """
         # Extract subgraph if focus entity is provided
         if focus_entity_id:
             graph = graph.get_subgraph(focus_entity_id, depth=depth)
-        
+
         documents = []
-        
+
         # Build documents for each entity
         for entity_id, entity in graph._entities.items():
             doc_content = self._entity_to_text(entity)
-            
+
             # Add relationships
             relationships = graph.get_relationships(entity_id)
             if relationships:
                 rel_text = self._relationships_to_text(relationships)
                 doc_content += f"\n\nRelationships:\n{rel_text}"
-            
-            documents.append(
-                Document(
-                    page_content=doc_content,
-                    metadata={
-                        "entity_id": entity_id,
-                        "entity_type": entity.entity_type.value,
-                        "entity_name": entity.name,
-                    },
-                )
-            )
-        
+
+            documents.append({
+                "content": doc_content,
+                "metadata": {
+                    "entity_id": entity_id,
+                    "entity_type": entity.entity_type.value,
+                    "entity_name": entity.name,
+                },
+            })
+
         # Add graph-level context
         graph_context = self._graph_to_text(graph)
         documents.insert(
             0,
-            Document(
-                page_content=graph_context,
-                metadata={
+            {
+                "content": graph_context,
+                "metadata": {
                     "type": "graph_overview",
                     "workspace_id": graph.workspace_id,
                 },
-            ),
+            },
         )
-        
+
         return documents
     
     def _entity_to_text(self, entity: NOGEntity) -> str:
@@ -176,9 +163,9 @@ class AIContextBuilder:
         """
         # Build context documents
         documents = self.build_context(graph, focus_entity_id)
-        
+
         # Combine document content
-        context_text = "\n\n---\n\n".join([doc.page_content for doc in documents])
+        context_text = "\n\n---\n\n".join([doc["content"] for doc in documents])
         
         # Build system prompt
         if system_prompt is None:

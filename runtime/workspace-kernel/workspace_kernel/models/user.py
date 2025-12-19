@@ -15,8 +15,9 @@ class User(Base):
 
     id = Column(String, primary_key=True)
     email = Column(String, unique=True, nullable=False, index=True)
-    username = Column(String, unique=True, nullable=False, index=True)
+    username = Column(String, unique=True, nullable=True, index=True)  # Made nullable for graphstudio-backend compatibility
     hashed_password = Column(String, nullable=False)
+    full_name = Column(String, nullable=True)  # Added for graphstudio-backend compatibility
 
     # Status
     is_active = Column(Boolean, default=True)

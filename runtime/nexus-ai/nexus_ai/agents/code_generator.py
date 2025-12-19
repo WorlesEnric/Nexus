@@ -1,14 +1,11 @@
 """
 Code Generator Agent - Generates NXML and handler code.
 
-Uses LangChain/CrewAI to generate panel code based on user requirements.
+Uses OpenAI API to generate panel code based on user requirements.
 """
 
 from typing import Dict, Any, Optional
-from langchain_openai import ChatOpenAI
-from langchain_anthropic import ChatAnthropic
-from langchain.prompts import ChatPromptTemplate
-from crewai import Agent, Task, Crew
+from openai import AsyncOpenAI
 
 from ..context_builder import AIContextBuilder
 from ..patch_generator import AIPatchGenerator
@@ -17,66 +14,43 @@ from ..patch_generator import AIPatchGenerator
 class CodeGeneratorAgent:
     """
     AI agent for generating NXML panel code.
-    
-    Uses LLM to generate panel definitions, handlers, and state logic
+
+    Uses OpenAI-compatible LLM to generate panel definitions, handlers, and state logic
     based on user requirements and workspace context.
     """
-    
+
     def __init__(
         self,
         model_provider: str = "openai",
         model_name: str = "gpt-4",
         api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
         temperature: float = 0.7,
     ):
         """
         Initialize code generator agent.
-        
+
         Args:
-            model_provider: LLM provider ("openai" or "anthropic")
+            model_provider: LLM provider (only "openai" for now)
             model_name: Model name
             api_key: API key for LLM provider
+            base_url: Optional base URL for OpenAI-compatible API
             temperature: LLM temperature
         """
         self.model_provider = model_provider
         self.model_name = model_name
         self.temperature = temperature
-        
-        # Initialize LLM
-        if model_provider == "openai":
-            self.llm = ChatOpenAI(
-                model_name=model_name,
-                temperature=temperature,
-                api_key=api_key,
-            )
-        elif model_provider == "anthropic":
-            self.llm = ChatAnthropic(
-                model=model_name,
-                temperature=temperature,
-                api_key=api_key,
-            )
-        else:
-            raise ValueError(f"Unsupported model provider: {model_provider}")
-        
+
+        # Initialize OpenAI client (works with any OpenAI-compatible API)
+        self.client = AsyncOpenAI(
+            api_key=api_key,
+            base_url=base_url,
+        )
+
         # Initialize context builder and patch generator
         self.context_builder = AIContextBuilder()
         self.patch_generator = AIPatchGenerator()
-        
-        # Create CrewAI agent
-        self.agent = Agent(
-            role="NXML Code Generator",
-            goal="Generate high-quality NXML panel code based on user requirements",
-            backstory=(
-                "You are an expert in NXML, the Nexus markup language. "
-                "You understand Data/Logic/View architecture and can generate "
-                "complete panel definitions with proper state management, "
-                "handlers, and UI components."
-            ),
-            verbose=True,
-            allow_delegation=False,
-            llm=self.llm,
-        )
-    
+
     async def generate_panel(
         self,
         requirement: str,
@@ -84,38 +58,42 @@ class CodeGeneratorAgent:
     ) -> str:
         """
         Generate NXML panel from requirement.
-        
+
         Args:
             requirement: User's requirement description
             workspace_context: Optional workspace context
-            
+
         Returns:
             NXML source code
         """
         # Build prompt
         prompt = self._build_panel_prompt(requirement, workspace_context)
-        
-        # Create task
-        task = Task(
-            description=prompt,
-            agent=self.agent,
-            expected_output="Complete NXML panel source code",
+
+        # Call OpenAI API
+        response = await self.client.chat.completions.create(
+            model=self.model_name,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an expert in NXML, the Nexus markup language. "
+                        "You understand Data/Logic/View architecture and can generate "
+                        "complete panel definitions with proper state management, "
+                        "handlers, and UI components."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=self.temperature,
         )
-        
-        # Create crew and execute
-        crew = Crew(
-            agents=[self.agent],
-            tasks=[task],
-            verbose=True,
-        )
-        
-        result = crew.kickoff()
-        
+
+        result = response.choices[0].message.content
+
         # Extract NXML from result
-        nxml_code = self._extract_nxml_code(str(result))
-        
+        nxml_code = self._extract_nxml_code(result)
+
         return nxml_code
-    
+
     async def generate_handler(
         self,
         handler_name: str,
@@ -125,13 +103,13 @@ class CodeGeneratorAgent:
     ) -> str:
         """
         Generate handler code.
-        
+
         Args:
             handler_name: Handler name
             handler_description: What the handler should do
             state_variables: Available state variables
             workspace_context: Optional workspace context
-            
+
         Returns:
             Handler JavaScript code
         """
@@ -141,28 +119,27 @@ class CodeGeneratorAgent:
             state_variables,
             workspace_context,
         )
-        
-        # Create task
-        task = Task(
-            description=prompt,
-            agent=self.agent,
-            expected_output="Complete handler JavaScript code",
+
+        # Call OpenAI API
+        response = await self.client.chat.completions.create(
+            model=self.model_name,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an expert JavaScript developer specializing in Nexus panel handlers.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=self.temperature,
         )
-        
-        # Create crew and execute
-        crew = Crew(
-            agents=[self.agent],
-            tasks=[task],
-            verbose=True,
-        )
-        
-        result = crew.kickoff()
-        
+
+        result = response.choices[0].message.content
+
         # Extract code from result
-        code = self._extract_code(str(result), "javascript")
-        
+        code = self._extract_code(result, "javascript")
+
         return code
-    
+
     async def enhance_panel(
         self,
         existing_nxml: str,
@@ -170,11 +147,11 @@ class CodeGeneratorAgent:
     ) -> str:
         """
         Enhance existing NXML panel.
-        
+
         Args:
             existing_nxml: Existing NXML source
             enhancement_request: What to add/change
-            
+
         Returns:
             Enhanced NXML source code
         """
@@ -189,25 +166,25 @@ Enhancement Request:
 {enhancement_request}
 
 Generate the complete enhanced NXML panel with the requested changes."""
-        
-        task = Task(
-            description=prompt,
-            agent=self.agent,
-            expected_output="Complete enhanced NXML panel source code",
+
+        # Call OpenAI API
+        response = await self.client.chat.completions.create(
+            model=self.model_name,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an expert in NXML, the Nexus markup language.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=self.temperature,
         )
-        
-        crew = Crew(
-            agents=[self.agent],
-            tasks=[task],
-            verbose=True,
-        )
-        
-        result = crew.kickoff()
-        
-        nxml_code = self._extract_nxml_code(str(result))
-        
+
+        result = response.choices[0].message.content
+        nxml_code = self._extract_nxml_code(result)
+
         return nxml_code
-    
+
     def _build_panel_prompt(
         self,
         requirement: str,
@@ -217,7 +194,7 @@ Generate the complete enhanced NXML panel with the requested changes."""
         context_str = ""
         if workspace_context:
             context_str = f"\n\nWorkspace Context:\n{workspace_context}"
-        
+
         return f"""Generate a complete NXML panel based on the following requirement.
 
 Requirement:
@@ -229,11 +206,11 @@ The NXML panel should follow this structure:
   <Data>
     <!-- Define state variables -->
   </Data>
-  
+
   <Logic>
     <!-- Define handlers -->
   </Logic>
-  
+
   <View>
     <!-- Define UI layout -->
   </View>
@@ -250,7 +227,7 @@ Guidelines:
 - Connect event handlers (onClick="handlerName")
 
 Generate the complete NXML panel."""
-    
+
     def _build_handler_prompt(
         self,
         handler_name: str,
@@ -260,11 +237,11 @@ Generate the complete NXML panel."""
     ) -> str:
         """Build prompt for handler generation."""
         state_list = "\n".join([f"- {var}" for var in state_variables])
-        
+
         context_str = ""
         if workspace_context:
             context_str = f"\n\nWorkspace Context:\n{workspace_context}"
-        
+
         return f"""Generate a JavaScript handler function for a Nexus panel.
 
 Handler Name: {handler_name}
@@ -283,49 +260,49 @@ Guidelines:
 - Keep code clean and maintainable
 
 Generate the complete handler function."""
-    
+
     def _extract_nxml_code(self, text: str) -> str:
         """Extract NXML code from LLM response."""
         import re
-        
+
         # Try to find NXML code block
         match = re.search(r"```nxml\s*\n(.*?)\n```", text, re.DOTALL)
         if match:
             return match.group(1).strip()
-        
+
         # Try to find XML code block
         match = re.search(r"```xml\s*\n(.*?)\n```", text, re.DOTALL)
         if match:
             return match.group(1).strip()
-        
+
         # Try to find generic code block
         match = re.search(r"```\s*\n(.*?)\n```", text, re.DOTALL)
         if match:
             content = match.group(1).strip()
             if content.startswith("<NexusPanel"):
                 return content
-        
+
         # Try to find <NexusPanel> tag directly
         match = re.search(r"<NexusPanel.*?>.*?</NexusPanel>", text, re.DOTALL)
         if match:
             return match.group(0)
-        
+
         # Return as-is if no extraction worked
         return text
-    
+
     def _extract_code(self, text: str, language: str = "javascript") -> str:
         """Extract code from LLM response."""
         import re
-        
+
         # Try to find code block with language
         match = re.search(rf"```{language}\s*\n(.*?)\n```", text, re.DOTALL)
         if match:
             return match.group(1).strip()
-        
+
         # Try to find generic code block
         match = re.search(r"```\s*\n(.*?)\n```", text, re.DOTALL)
         if match:
             return match.group(1).strip()
-        
+
         # Return as-is
         return text

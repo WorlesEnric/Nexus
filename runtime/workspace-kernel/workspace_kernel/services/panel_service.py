@@ -2,11 +2,13 @@
 Panel service - Panel lifecycle management.
 """
 
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, Set
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import hashlib
 import uuid
+import asyncio
+import logging
 
 from nexus_core.parser import parse_nxml
 from nexus_core.sandbox import SandboxExecutor, ExecutionContext
@@ -14,6 +16,14 @@ from nexus_protocol.ast import NexusPanelAST
 
 from ..models import Panel, Workspace
 from .nog_service import NOGService
+
+# Track active panel execution tasks for cleanup
+# Key: (workspace_id, panel_id)
+# Value: Set of asyncio.Task handles
+_active_panel_tasks: Dict[tuple, Set[asyncio.Task]] = {}
+_tasks_lock = asyncio.Lock()
+
+logger = logging.getLogger(__name__)
 
 
 class PanelService:
@@ -203,8 +213,29 @@ class PanelService:
             capabilities=capabilities,
         )
 
-        # Execute
-        result = await self.executor.execute(handler_node.code, context)
+        # Create task for handler execution and track it
+        async def execute_with_tracking():
+            return await self.executor.execute(handler_node.code, context)
+
+        task = asyncio.create_task(execute_with_tracking())
+
+        # Register task for tracking
+        key = (panel.workspace_id, panel_id)
+        async with _tasks_lock:
+            if key not in _active_panel_tasks:
+                _active_panel_tasks[key] = set()
+            _active_panel_tasks[key].add(task)
+
+        try:
+            # Execute and wait for result
+            result = await task
+        finally:
+            # Unregister task
+            async with _tasks_lock:
+                if key in _active_panel_tasks:
+                    _active_panel_tasks[key].discard(task)
+                    if not _active_panel_tasks[key]:
+                        del _active_panel_tasks[key]
 
         # Update metrics
         panel.handler_execution_count += 1
@@ -246,3 +277,49 @@ class PanelService:
         await db.commit()
 
         return True
+
+    @staticmethod
+    async def stop_workspace_panels(workspace_id: str) -> int:
+        """
+        Stop all active panel executions for a workspace (multi-tenant safe).
+
+        Args:
+            workspace_id: Workspace ID
+
+        Returns:
+            Number of tasks stopped
+        """
+        stopped_count = 0
+
+        async with _tasks_lock:
+            # Find all tasks for this workspace
+            keys_to_remove = []
+            for key, tasks in list(_active_panel_tasks.items()):
+                ws_id, panel_id = key
+                if ws_id == workspace_id:
+                    # Cancel all tasks for this panel
+                    tasks_copy = list(tasks)
+                    for task in tasks_copy:
+                        if not task.done():
+                            task.cancel()
+                            stopped_count += 1
+                    keys_to_remove.append(key)
+
+        # Wait for cancellation with timeout (outside lock)
+        for key in keys_to_remove:
+            ws_id, panel_id = key
+            if key in _active_panel_tasks:
+                tasks_copy = list(_active_panel_tasks[key])
+                if tasks_copy:
+                    try:
+                        await asyncio.wait(tasks_copy, timeout=2.0)
+                    except Exception as e:
+                        logger.error(f"Error waiting for task cancellation: {e}")
+
+        # Clean up task registry
+        async with _tasks_lock:
+            for key in keys_to_remove:
+                _active_panel_tasks.pop(key, None)
+
+        logger.info(f"Stopped {stopped_count} panel tasks for workspace {workspace_id}")
+        return stopped_count

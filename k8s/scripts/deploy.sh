@@ -27,6 +27,16 @@ if ! command -v kubectl &> /dev/null; then
     exit 1
 fi
 
+# Parse command line arguments
+REBUILD_IMAGES=false
+RESTART_DEPLOYMENTS=false
+if [[ "$1" == "--rebuild" ]] || [[ "$1" == "-r" ]]; then
+    REBUILD_IMAGES=true
+    RESTART_DEPLOYMENTS=true
+elif [[ "$1" == "--restart" ]]; then
+    RESTART_DEPLOYMENTS=true
+fi
+
 # Detect if using kind cluster
 CURRENT_CONTEXT=$(kubectl config current-context)
 IS_KIND=false
@@ -34,6 +44,18 @@ if [[ "$CURRENT_CONTEXT" == kind-* ]]; then
     IS_KIND=true
     CLUSTER_NAME=${CURRENT_CONTEXT#kind-}
     echo -e "${YELLOW}Detected kind cluster: ${CLUSTER_NAME}${NC}"
+fi
+
+# Rebuild images if requested
+if [ "$REBUILD_IMAGES" = true ]; then
+    echo -e "${YELLOW}Rebuilding Docker images...${NC}"
+    if [ -f "k8s/scripts/build-images.sh" ]; then
+        ./k8s/scripts/build-images.sh
+    else
+        echo -e "${RED}Error: build-images.sh not found${NC}"
+        exit 1
+    fi
+    echo ""
 fi
 
 # Check if images exist
@@ -59,6 +81,7 @@ if [ ${#MISSING_IMAGES[@]} -gt 0 ]; then
     done
     echo ""
     echo -e "${YELLOW}Please run: ./k8s/scripts/build-images.sh${NC}"
+    echo -e "${YELLOW}Or use: ./k8s/scripts/deploy.sh --rebuild${NC}"
     exit 1
 fi
 
@@ -120,6 +143,18 @@ if [ -f k8s/ingress/ingress.yaml ]; then
     kubectl apply -f k8s/ingress/ingress.yaml
 fi
 
+# Restart deployments if requested (to pick up new images)
+if [ "$RESTART_DEPLOYMENTS" = true ]; then
+    echo ""
+    echo -e "${YELLOW}Restarting deployments to pick up new images...${NC}"
+    kubectl rollout restart deployment/workspace-kernel -n nexus-python || true
+    kubectl rollout restart deployment/nexus-state -n nexus-python || true
+    kubectl rollout restart deployment/graphstudio-backend -n nexus-python || true
+    kubectl rollout restart deployment/graphstudio-frontend -n nexus-python || true
+    echo -e "${GREEN}Deployments restarted${NC}"
+    echo ""
+fi
+
 # Wait for deployments to be ready
 echo -e "${YELLOW}Waiting for deployments to be ready...${NC}"
 echo -e "  Waiting for workspace-kernel..."
@@ -179,6 +214,11 @@ echo -e "  ${GREEN}./k8s/scripts/logs.sh graphstudio-frontend${NC}"
 echo ""
 echo -e "${YELLOW}To check status:${NC}"
 echo -e "  ${GREEN}./k8s/scripts/status.sh${NC}"
+echo ""
+echo -e "${YELLOW}Usage:${NC}"
+echo -e "  ${GREEN}./k8s/scripts/deploy.sh${NC}              - Deploy without rebuilding"
+echo -e "  ${GREEN}./k8s/scripts/deploy.sh --rebuild${NC}   - Rebuild images and restart deployments"
+echo -e "  ${GREEN}./k8s/scripts/deploy.sh --restart${NC}   - Restart deployments only"
 echo ""
 echo -e "${BLUE}================================================${NC}"
 echo -e "${BLUE}  Setting up port forwarding...${NC}"

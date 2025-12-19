@@ -224,15 +224,44 @@ async def websocket_endpoint(
         payload = jwt.decode(
             token, settings.jwt_secret_key, algorithms=[settings.jwt_algorithm]
         )
-        user_id: str = payload.get("sub")
+        # Check for userId first (graphstudio-backend format), then fall back to sub
+        user_id: str = payload.get("userId") or payload.get("sub")
         if user_id is None:
             await websocket.close(code=status.WS_1008_POLICY_VIOLATION)
             return
 
-        # Get user from database
+        # Get user from database, auto-create if doesn't exist
         async with AsyncSession(engine) as db:
             result = await db.execute(select(User).where(User.id == user_id))
             user = result.scalar_one_or_none()
+
+            # Auto-create user if they don't exist (lazy user creation for multi-service auth)
+            if user is None:
+                # Extract email from token payload
+                email: str = payload.get("email") or payload.get("sub")
+                if not email or email == user_id:
+                    # If email is not available or same as user_id, generate a username
+                    email = f"user_{user_id[:8]}@nexus.local"
+                
+                # Generate username from email
+                username = email.split("@")[0]
+                
+                # Create new user record
+                # Use a placeholder hash since JWT auth doesn't require password
+                from passlib.context import CryptContext
+                pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+                placeholder_hash = pwd_context.hash("jwt-auth-no-password")
+                user = User(
+                    id=user_id,
+                    email=email,
+                    username=username,
+                    hashed_password=placeholder_hash,
+                    is_active=True,
+                    is_verified=True,
+                )
+                db.add(user)
+                await db.commit()
+                await db.refresh(user)
 
             if not user or not user.is_active:
                 await websocket.close(code=status.WS_1008_POLICY_VIOLATION)

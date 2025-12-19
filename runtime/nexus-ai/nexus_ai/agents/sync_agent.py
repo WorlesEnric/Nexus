@@ -8,9 +8,7 @@ import sys
 import time
 from pathlib import Path
 from typing import Dict, Any, Optional, List
-from langchain_openai import ChatOpenAI
-from langchain_anthropic import ChatAnthropic
-from crewai import Agent, Task, Crew
+from openai import AsyncOpenAI
 
 from ..patch_generator import NOGPatch
 
@@ -36,46 +34,22 @@ class SyncAgent:
         model_provider: str = "openai",
         model_name: str = "gpt-4",
         api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
         temperature: float = 0.2,  # Lower temperature for consistency
     ):
         """
         Initialize sync agent.
 
         Args:
-            model_provider: LLM provider ("openai" or "anthropic")
+            model_provider: LLM provider
             model_name: Model name
             api_key: API key for LLM provider
+            base_url: Optional base URL for OpenAI-compatible API
             temperature: LLM temperature
         """
-        # Initialize LLM
-        if model_provider == "openai":
-            self.llm = ChatOpenAI(
-                model_name=model_name,
-                temperature=temperature,
-                api_key=api_key,
-            )
-        elif model_provider == "anthropic":
-            self.llm = ChatAnthropic(
-                model=model_name,
-                temperature=temperature,
-                api_key=api_key,
-            )
-        else:
-            raise ValueError(f"Unsupported model provider: {model_provider}")
-
-        # Create CrewAI agent
-        self.agent = Agent(
-            role="NOG Synchronization Expert",
-            goal="Ensure consistency and correctness of NOG graph changes",
-            backstory=(
-                "You are an expert in graph databases and dependency management. "
-                "You understand the Nexus Object Graph (NOG) and can identify "
-                "potential conflicts, missing dependencies, and breaking changes."
-            ),
-            verbose=True,
-            allow_delegation=False,
-            llm=self.llm,
-        )
+        self.model_name = model_name
+        self.temperature = temperature
+        self.client = AsyncOpenAI(api_key=api_key, base_url=base_url)
 
     async def validate_patch(
         self,
@@ -113,21 +87,23 @@ Provide:
 - List of warnings (potential issues)
 - Suggested fixes for each issue"""
 
-        task = Task(
-            description=prompt,
-            agent=self.agent,
-            expected_output="Validation result with errors, warnings, and fixes",
+        response = await self.client.chat.completions.create(
+            model=self.model_name,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "You are an expert in graph databases and dependency management. "
+                        "You understand the Nexus Object Graph (NOG) and can identify "
+                        "potential conflicts, missing dependencies, and breaking changes."
+                    ),
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=self.temperature,
         )
 
-        crew = Crew(
-            agents=[self.agent],
-            tasks=[task],
-            verbose=True,
-        )
-
-        result = crew.kickoff()
-
-        return {"validation": str(result)}
+        return {"validation": response.choices[0].message.content}
 
     async def analyze_impact(
         self,
@@ -166,21 +142,19 @@ Provide:
 - Risk assessment (low, medium, high)
 - Recommended actions before applying patch"""
 
-        task = Task(
-            description=prompt,
-            agent=self.agent,
-            expected_output="Impact analysis with affected entities and recommendations",
+        response = await self.client.chat.completions.create(
+            model=self.model_name,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an expert at analyzing system changes and their impacts.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=self.temperature,
         )
 
-        crew = Crew(
-            agents=[self.agent],
-            tasks=[task],
-            verbose=True,
-        )
-
-        result = crew.kickoff()
-
-        return {"impact": str(result)}
+        return {"impact": response.choices[0].message.content}
 
     async def suggest_dependency_updates(
         self,
@@ -220,21 +194,19 @@ For each dependent entity, suggest:
 
 Format as JSON array with: entity_id, update_type, description, priority."""
 
-        task = Task(
-            description=prompt,
-            agent=self.agent,
-            expected_output="List of suggested updates for dependent entities",
+        response = await self.client.chat.completions.create(
+            model=self.model_name,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an expert in dependency management and software architecture.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=self.temperature,
         )
 
-        crew = Crew(
-            agents=[self.agent],
-            tasks=[task],
-            verbose=True,
-        )
-
-        result = crew.kickoff()
-
-        return [{"suggestion": str(result)}]
+        return [{"suggestion": response.choices[0].message.content}]
 
     async def resolve_conflicts(
         self,
@@ -272,19 +244,17 @@ Resolve conflicts by:
 
 Provide a merged patch in JSON format that resolves all conflicts."""
 
-        task = Task(
-            description=prompt,
-            agent=self.agent,
-            expected_output="Merged NOG patch that resolves conflicts",
+        response = await self.client.chat.completions.create(
+            model=self.model_name,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are an expert at resolving merge conflicts and maintaining consistency.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=self.temperature,
         )
-
-        crew = Crew(
-            agents=[self.agent],
-            tasks=[task],
-            verbose=True,
-        )
-
-        result = crew.kickoff()
 
         # Parse result into NOGPatch
         # For now, return original patch1 (TODO: implement proper parsing)
@@ -324,18 +294,16 @@ Provide:
 - Specific refactoring suggestions
 - Expected benefits of each refactoring"""
 
-        task = Task(
-            description=prompt,
-            agent=self.agent,
-            expected_output="Refactoring suggestions with priorities and benefits",
+        response = await self.client.chat.completions.create(
+            model=self.model_name,
+            messages=[
+                {
+                    "role": "system",
+                    "content": "You are a software architecture expert specializing in code refactoring.",
+                },
+                {"role": "user", "content": prompt},
+            ],
+            temperature=self.temperature,
         )
 
-        crew = Crew(
-            agents=[self.agent],
-            tasks=[task],
-            verbose=True,
-        )
-
-        result = crew.kickoff()
-
-        return {"suggestions": str(result)}
+        return {"suggestions": response.choices[0].message.content}

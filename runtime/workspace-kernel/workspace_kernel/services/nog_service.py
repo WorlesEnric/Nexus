@@ -144,3 +144,24 @@ class NOGService:
         """
         graph = NOGSerializer.from_file(file_path)
         self._graphs[workspace_id] = graph
+
+    def clear_workspace_state(self, workspace_id: str) -> bool:
+        """
+        Clear NOG state for a workspace (multi-tenant safe).
+
+        This removes the in-memory graph for the workspace.
+        Used when deactivating a workspace.
+
+        Args:
+            workspace_id: Workspace ID
+
+        Returns:
+            True if cleared, False if workspace not found
+        """
+        if workspace_id in self._graphs:
+            del self._graphs[workspace_id]
+            trilog_logger.event("nog_state_cleared",
+                workspace_id=workspace_id
+            )
+            return True
+        return False

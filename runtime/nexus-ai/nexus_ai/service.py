@@ -38,21 +38,20 @@ class AIService:
         model_provider: str = "openai",
         model_name: str = "gpt-4",
         api_key: Optional[str] = None,
+        base_url: Optional[str] = None,
     ):
         """
         Initialize AI service.
 
         Args:
-            model_provider: LLM provider ("openai" or "anthropic")
+            model_provider: LLM provider ("openai" for now)
             model_name: Model name
-            api_key: API key (defaults to env variable)
+            api_key: API key (defaults to OPENAI_API_KEY env variable)
+            base_url: Optional base URL for OpenAI-compatible API (e.g. SiliconFlow)
         """
         # Get API key from environment if not provided
         if api_key is None:
-            if model_provider == "openai":
-                api_key = os.getenv("OPENAI_API_KEY")
-            elif model_provider == "anthropic":
-                api_key = os.getenv("ANTHROPIC_API_KEY")
+            api_key = os.getenv("OPENAI_API_KEY")
 
         # Initialize components
         self.context_builder = AIContextBuilder()
@@ -63,18 +62,21 @@ class AIService:
             model_provider=model_provider,
             model_name=model_name,
             api_key=api_key,
+            base_url=base_url,
         )
 
         self.design_agent = DesignAgent(
             model_provider=model_provider,
             model_name=model_name,
             api_key=api_key,
+            base_url=base_url,
         )
 
         self.sync_agent = SyncAgent(
             model_provider=model_provider,
             model_name=model_name,
             api_key=api_key,
+            base_url=base_url,
         )
 
     async def generate_panel_from_description(
@@ -182,11 +184,13 @@ class AIService:
             context=prompt_data["context"],
         )
 
-        # Call LLM (using code agent's LLM)
-        from langchain.schema import HumanMessage
-
-        response = await self.code_agent.llm.agenerate([[HumanMessage(content=patch_prompt)]])
-        llm_response = response.generations[0][0].text
+        # Call LLM using code agent's client
+        response = await self.code_agent.client.chat.completions.create(
+            model=self.code_agent.model_name,
+            messages=[{"role": "user", "content": patch_prompt}],
+            temperature=self.code_agent.temperature,
+        )
+        llm_response = response.choices[0].message.content
 
         # Parse response into patch
         patch = self.patch_generator.parse_llm_response(llm_response)

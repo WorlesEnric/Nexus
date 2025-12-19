@@ -68,11 +68,12 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
     db: AsyncSession = Depends(get_db),
 ) -> User:
-    """Get current user from JWT token."""
+    """Get current user from JWT token. Auto-creates user if they don't exist."""
     token = credentials.credentials
     payload = decode_access_token(token)
 
-    user_id: str = payload.get("sub")
+    # Check for userId first (graphstudio-backend format), then fall back to sub
+    user_id: str = payload.get("userId") or payload.get("sub")
     if user_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -83,10 +84,32 @@ async def get_current_user(
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
 
+    # Auto-create user if they don't exist (lazy user creation for multi-service auth)
     if user is None:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found"
+        # Extract email from token payload
+        email: str = payload.get("email") or payload.get("sub")
+        if not email or email == user_id:
+            # If email is not available or same as user_id, generate a username
+            email = f"user_{user_id[:8]}@nexus.local"
+        
+        # Generate username from email
+        username = email.split("@")[0]
+        
+        # Create new user record
+        # Use a placeholder hash since JWT auth doesn't require password
+        # (bcrypt hash of "jwt-auth-no-password" - never used for validation)
+        placeholder_hash = pwd_context.hash("jwt-auth-no-password")
+        user = User(
+            id=user_id,
+            email=email,
+            username=username,
+            hashed_password=placeholder_hash,
+            is_active=True,
+            is_verified=True,
         )
+        db.add(user)
+        await db.commit()
+        await db.refresh(user)
 
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Inactive user")

@@ -11,9 +11,9 @@ from pydantic import BaseModel
 import uuid
 
 from ..database import get_db
-from ..models import User, Workspace
+from ..models import User, Workspace, Panel
 from ..auth import get_current_active_user
-from ..services import GitService
+from ..services import GitService, PanelService, NOGService
 
 # TriLog imports
 sys.path.insert(0, str(Path(__file__).parent.parent.parent.parent.parent))
@@ -23,6 +23,8 @@ from trilog.context import anchor
 
 router = APIRouter()
 git_service = GitService()
+panel_service = PanelService()
+nog_service = NOGService()
 trilog_logger = get_logger("workspace_kernel.workspaces")
 
 
@@ -193,6 +195,91 @@ async def activate_workspace(
         "status": "active",
         "message": "Workspace activated successfully",
         "workspace_id": workspace_id
+    }
+
+
+@router.post("/{workspace_id}/deactivate")
+async def deactivate_workspace(
+    workspace_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """
+    Deactivate a workspace and cleanup its resources.
+
+    This is multi-tenant safe - only cleans up panels for this user's workspace.
+    Stops all running panel executions and clears NOG state.
+    """
+    # Verify user has access to this workspace
+    result = await db.execute(
+        select(Workspace).where(
+            Workspace.id == workspace_id,
+            Workspace.owner_id == current_user.id
+        )
+    )
+    workspace = result.scalar_one_or_none()
+
+    if not workspace:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Workspace not found"
+        )
+
+    # Get all panels for THIS workspace (belongs to THIS USER)
+    result = await db.execute(
+        select(Panel).where(Panel.workspace_id == workspace_id)
+    )
+    panels = result.scalars().all()
+
+    # Stop running panels (multi-tenant safe - workspace belongs to user)
+    running_panel_count = sum(1 for p in panels if p.is_running)
+
+    # Stop all panel execution tasks for this workspace
+    try:
+        stopped_tasks = await PanelService.stop_workspace_panels(workspace_id)
+    except Exception as e:
+        trilog_logger.error("panel_stop_failed",
+            workspace_id=workspace_id,
+            error=str(e)
+        )
+        stopped_tasks = 0
+
+    # Update panel states
+    for panel in panels:
+        if panel.is_running:
+            panel.is_running = False
+
+    # Clear NOG state for this workspace
+    try:
+        nog_cleared = nog_service.clear_workspace_state(workspace_id)
+    except Exception as e:
+        trilog_logger.error("nog_clear_failed",
+            workspace_id=workspace_id,
+            error=str(e)
+        )
+        nog_cleared = False
+
+    # Update workspace status
+    workspace.status = "inactive"
+
+    await db.commit()
+
+    # TriLog: Track workspace deactivation
+    with anchor(workspace_id, WorkspaceSchema):
+        trilog_logger.event("workspace_deactivated",
+            workspace_name=workspace.name,
+            user_id=current_user.id,
+            panels_stopped=stopped_tasks,
+            nog_cleared=nog_cleared
+        )
+
+    return {
+        "status": "inactive",
+        "message": "Workspace deactivated successfully",
+        "workspace_id": workspace_id,
+        "panels_stopped": stopped_tasks,
+        "running_panels": running_panel_count,
+        "nog_cleared": nog_cleared
     }
 
 

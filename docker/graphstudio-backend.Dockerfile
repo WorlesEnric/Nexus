@@ -29,6 +29,9 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 # Copy application code
 COPY runtime/graphstudio-backend /app
 
+# Copy NXML panel files for marketplace seeding
+COPY apps/GraphStudio/src/panels/nxml /app/nxml_panels
+
 # Expose port
 EXPOSE 3000
 
