@@ -56,3 +56,11 @@ spec:
                 name: graphstudio-backend
                 port:
                   number: 3000
+          # Marketplace API
+          - path: /marketplace
+            pathType: Prefix
+            backend:
+              service:
+                name: graphstudio-backend
+                port:
+                  number: 3000

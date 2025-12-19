@@ -4,6 +4,8 @@ Configuration for Workspace Kernel.
 
 from pydantic_settings import BaseSettings
 from typing import List
+import json
+import os
 
 
 class Settings(BaseSettings):
@@ -18,8 +20,16 @@ class Settings(BaseSettings):
     host: str = "0.0.0.0"
     port: int = 3000
 
-    # CORS
-    cors_origins: List[str] = ["http://localhost:5173", "http://localhost:3000"]
+    # CORS - Parse JSON string from env var
+    @property
+    def cors_origins(self) -> List[str]:
+        """Parse CORS_ORIGINS from environment variable"""
+        cors_str = os.getenv("CORS_ORIGINS", '["http://localhost:5173", "http://localhost:3000", "http://localhost:8080", "http://localhost:30091"]')
+        try:
+            return json.loads(cors_str)
+        except json.JSONDecodeError:
+            # Fallback to default
+            return ["http://localhost:5173", "http://localhost:3000", "http://localhost:8080", "http://localhost:30091"]
 
     # Database
     database_url: str = "postgresql+asyncpg://nexus:nexus@localhost:5432/nexus"

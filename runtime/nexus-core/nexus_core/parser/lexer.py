@@ -128,11 +128,15 @@ class Lexer:
             self.advance()
             return
 
-        # Check for opening tag
+        # Check for opening tag or comment
         if char == "<":
             if self.peek_next() == "/":
                 # Closing tag
                 self._scan_closing_tag()
+                return
+            elif self.peek_next() == "!" and self.pos + 2 < len(self.source) and self.source[self.pos + 2:self.pos + 4] == "--":
+                # Comment <!--...-->
+                self._scan_comment()
                 return
             else:
                 # Opening tag
@@ -146,8 +150,15 @@ class Lexer:
 
         # Check if we're inside a Handler tag (code block)
         if self.in_handler:
-            self._scan_code_block()
-            return
+            # Check if we're at the closing </Handler> tag
+            if char == "<" and self.peek_next() == "/":
+                # Let the closing tag handler deal with it
+                self._scan_closing_tag()
+                return
+            else:
+                # Scan the handler code block
+                self._scan_code_block()
+                return
 
         # Regular text content
         self._scan_text()
@@ -297,6 +308,31 @@ class Lexer:
         code = self.source[start : self.pos].strip()
         if code:
             self._add_token(TokenType.CODE_BLOCK, code)
+
+    def _scan_comment(self):
+        """Scan XML comment <!--...-->."""
+        start_loc = self._current_location()
+        self.advance()  # Skip <
+        self.advance()  # Skip !
+        self.advance()  # Skip first -
+        self.advance()  # Skip second -
+
+        # Scan until we find -->
+        while not self.is_at_end():
+            if self.peek() == "-" and self.pos + 2 < len(self.source) and self.source[self.pos:self.pos + 3] == "-->":
+                # Found end of comment
+                self.advance()  # Skip -
+                self.advance()  # Skip -
+                self.advance()  # Skip >
+                break
+
+            if self.peek() == "\n":
+                self.line += 1
+                self.column = 1
+
+            self.advance()
+
+        # Comments are not added as tokens - they're just skipped
 
     def _add_token(self, token_type: TokenType, value: str):
         """Add a token to the list."""

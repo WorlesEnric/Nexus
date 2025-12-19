@@ -1,6 +1,11 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from datetime import datetime
 from typing import Optional, List
+
+def to_camel(string: str) -> str:
+    """Convert snake_case to camelCase."""
+    components = string.split('_')
+    return components[0] + ''.join(x.title() for x in components[1:])
 
 # Token schemas
 class Token(BaseModel):
@@ -50,13 +55,16 @@ User.model_rebuild()
 
 class PanelAuthor(BaseModel):
     """Author information for marketplace panels."""
+    model_config = ConfigDict(
+        from_attributes=True,
+        alias_generator=to_camel,
+        populate_by_name=True
+    )
+
     id: str
     full_name: Optional[str] = None
     email: str
     username: Optional[str] = None
-
-    class Config:
-        from_attributes = True
 
 
 class PublishPanelRequest(BaseModel):
@@ -84,6 +92,12 @@ class UpdatePanelRequest(BaseModel):
 
 class MarketplacePanelResponse(BaseModel):
     """Response schema for marketplace panel details."""
+    model_config = ConfigDict(
+        from_attributes=True,
+        alias_generator=to_camel,
+        populate_by_name=True
+    )
+
     id: str
     name: str
     description: str
@@ -103,9 +117,6 @@ class MarketplacePanelResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     published_at: Optional[datetime] = None
-
-    class Config:
-        from_attributes = True
 
 
 class MarketplacePanelListResponse(BaseModel):

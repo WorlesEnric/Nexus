@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Dict, Any
 
 from ..database import get_db
@@ -43,6 +43,14 @@ class PanelResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class CreatePanelFromNXMLRequest(BaseModel):
+    nxml_source: str = Field(..., alias='nxmlSource')
+    initial_state: Dict[str, Any] = Field(default_factory=dict, alias='initialState')
+
+    class Config:
+        populate_by_name = True
 
 
 class ExecuteHandlerRequest(BaseModel):
@@ -98,6 +106,85 @@ async def create_panel(
     except ValueError as e:
         trilog_logger.error("panel_creation_failed", error=str(e))
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+
+@router.post("/from-nxml", status_code=status.HTTP_201_CREATED)
+async def create_panel_from_nxml(
+    request: CreatePanelFromNXMLRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_active_user),
+):
+    """Create a new panel from NXML source (marketplace panel addition)."""
+    import logging
+    from sqlalchemy import select
+    from ..models import Workspace
+
+    logger = logging.getLogger("workspace_kernel.panels.from_nxml")
+    logger.info(f"[from-nxml] Creating panel for user: {current_user.email}")
+    logger.info(f"[from-nxml] NXML length: {len(request.nxml_source)}")
+
+    try:
+        # Get or create default workspace for user
+        result = await db.execute(
+            select(Workspace)
+            .where(Workspace.owner_id == current_user.id)
+            .where(Workspace.status == "active")
+            .limit(1)
+        )
+        workspace = result.scalar_one_or_none()
+
+        if not workspace:
+            # Create default workspace
+            import uuid
+            workspace_id = str(uuid.uuid4())
+            workspace = Workspace(
+                id=workspace_id,
+                name="Default Workspace",
+                description="Auto-created workspace",
+                owner_id=current_user.id,
+                is_public=False,
+                git_repo_path=f"/app/workspaces/{workspace_id}",
+                status="active"
+            )
+            db.add(workspace)
+            await db.commit()
+            await db.refresh(workspace)
+            logger.info(f"[from-nxml] Created default workspace: {workspace_id}")
+
+        # Create panel with auto-generated name
+        panel_name = f"Panel-{workspace.panel_count + 1}"
+        logger.info(f"[from-nxml] Creating panel in workspace: {workspace.id}")
+
+        try:
+            panel = await panel_service.create_panel(
+                db=db,
+                workspace_id=workspace.id,
+                user_id=current_user.id,
+                name=panel_name,
+                nxml_source=request.nxml_source,
+                panel_type="marketplace",
+            )
+        except Exception as panel_error:
+            logger.error(f"[from-nxml] Panel creation failed: {str(panel_error)}", exc_info=True)
+            raise
+
+        # Build WebSocket URL
+        ws_url = f"ws://localhost:30091/panels/{panel.id}/ws"
+
+        logger.info(f"[from-nxml] Panel created successfully: {panel.id}")
+
+        # Return format expected by frontend
+        return {
+            "id": panel.id,
+            "status": "created",
+            "wsUrl": ws_url
+        }
+    except Exception as e:
+        logger.error(f"[from-nxml] Error creating panel: {str(e)}", exc_info=True)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create panel: {str(e)}"
+        )
 
 
 @router.get("/{panel_id}", response_model=PanelResponse)

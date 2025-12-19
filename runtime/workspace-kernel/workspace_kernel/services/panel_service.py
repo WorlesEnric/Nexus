@@ -67,9 +67,12 @@ class PanelService:
             raise ValueError("Workspace not found or access denied")
 
         # Parse NXML
+        logger.info(f"[PanelService] Parsing NXML, length: {len(nxml_source)}")
         try:
             ast = parse_nxml(nxml_source)
+            logger.info(f"[PanelService] NXML parsed successfully")
         except Exception as e:
+            logger.error(f"[PanelService] NXML parsing failed: {str(e)}", exc_info=True)
             raise ValueError(f"NXML parsing failed: {str(e)}")
 
         # Generate panel ID and hash

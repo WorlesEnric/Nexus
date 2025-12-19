@@ -24,6 +24,7 @@ class NXMLPrimitiveType(str, Enum):
     NUMBER = "number"
     BOOLEAN = "boolean"
     ARRAY = "array"
+    LIST = "list"  # Alias for array
     OBJECT = "object"
     ANY = "any"
 

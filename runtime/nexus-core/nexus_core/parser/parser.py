@@ -239,8 +239,10 @@ class Parser:
 
     def _parse_tool_node(self) -> ToolNode:
         """Parse <Tool> node."""
-        self._consume_tag_open("Tool")
+        self._expect(TokenType.TAG_OPEN)
+        self._expect_tag_name("Tool")
         attrs = self._parse_attributes()
+        self._expect(TokenType.TAG_CLOSE)
 
         # Parse child elements
         args: List[ArgNode] = []
@@ -295,8 +297,10 @@ class Parser:
 
     def _parse_handler_node(self) -> HandlerNode:
         """Parse <Handler> node."""
-        self._consume_tag_open("Handler")
+        self._expect(TokenType.TAG_OPEN)
+        self._expect_tag_name("Handler")
         attrs = self._parse_attributes()
+        self._expect(TokenType.TAG_CLOSE)
 
         # Get handler code (CODE_BLOCK token)
         code = ""
@@ -321,8 +325,10 @@ class Parser:
 
     def _parse_lifecycle_node(self) -> LifecycleNode:
         """Parse <Lifecycle> node."""
-        self._consume_tag_open("Lifecycle")
+        self._expect(TokenType.TAG_OPEN)
+        self._expect_tag_name("Lifecycle")
         attrs = self._parse_attributes()
+        self._expect(TokenType.TAG_CLOSE)
 
         handler: Optional[HandlerNode] = None
 

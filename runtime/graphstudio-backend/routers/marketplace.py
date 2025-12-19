@@ -99,17 +99,28 @@ def get_panel(
 
     Only returns published panels unless the requesting user is the author.
     """
+    import logging
+    logger = logging.getLogger("marketplace.get_panel")
+
+    logger.info(f"[get_panel] Request for panel_id: {panel_id}")
+    logger.info(f"[get_panel] User: {current_user.email} (ID: {current_user.id})")
+
     panel = db.query(models.MarketplacePanel).filter(
         models.MarketplacePanel.id == panel_id
     ).first()
 
     if not panel:
+        logger.error(f"[get_panel] Panel not found in database: {panel_id}")
         raise HTTPException(status_code=404, detail="Panel not found")
+
+    logger.info(f"[get_panel] Panel found: {panel.name} (visibility: {panel.visibility}, author: {panel.author_id})")
 
     # Check visibility - only author can see non-published panels
     if panel.visibility != "published" and panel.author_id != current_user.id:
+        logger.warning(f"[get_panel] Access denied - panel not published and user is not author")
         raise HTTPException(status_code=404, detail="Panel not found")
 
+    logger.info(f"[get_panel] Returning panel: {panel.name}, NXML length: {len(panel.nxml_source) if panel.nxml_source else 0}")
     return panel
 
 
