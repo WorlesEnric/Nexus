@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nexus-config
+  namespace: nexus
+data:
+  # Environment
+  NODE_ENV: "development"
+  LOG_LEVEL: "debug"
+
+  # Workspace Kernel Configuration
+  MULTI_TENANT_MODE: "true"
+  MAX_WORKSPACES_PER_POD: "50"
+  IDLE_WORKSPACE_TIMEOUT_MS: "1800000"  # 30 minutes
+  AUTH_ENABLED: "true"
+
+  # Database Configuration
+  DATABASE_HOST: "postgres"
+  DATABASE_PORT: "5432"
+  DATABASE_NAME: "nexus"
+  DATABASE_USER: "nexus"
+
+  # Redis Configuration
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+
+  # Service URLs
+  WORKSPACE_KERNEL_URL: "http://workspace-kernel:3000"
+  NEXUS_OS_URL: "http://nexus-os:4000"
+
+  # CORS Configuration
+  CORS_ORIGINS: "*"
+
+  # Body Parser Limits
+  BODY_LIMIT: "10mb"

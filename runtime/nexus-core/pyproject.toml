@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nexus-core"
+version = "1.0.0"
+description = "Core Nexus runtime: NXML parser, NOG graph, and sandbox executor"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    {name = "Nexus Team"},
+]
+license = {text = "MIT"}
+
+dependencies = [
+    "nexus-protocol>=1.0.0",
+    "pydantic>=2.5.0,<3.0.0",
+    "networkx>=3.2",
+    "wasmtime>=17.0.0",
+    "cachetools>=5.3.0",
+    "lark>=1.1.8",  # For NXML parsing
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-benchmark>=4.0.0",
+    "black>=23.7.0",
+    "ruff>=0.0.285",
+    "mypy>=1.5.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["nexus_core*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --cov=nexus_core --cov-report=term-missing"
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true

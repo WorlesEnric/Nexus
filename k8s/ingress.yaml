@@ -1,0 +1,95 @@
+---
+# Ingress for workspace-kernel (Python FastAPI backend)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nexus-api-ingress
+  namespace: nexus-python
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/websocket-services: workspace-kernel
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    cert-manager.io/cluster-issuer: letsencrypt-prod  # If using cert-manager
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - api.nexus.example.com  # Change to your domain
+      secretName: nexus-api-tls
+  rules:
+    - host: api.nexus.example.com  # Change to your domain
+      http:
+        paths:
+          # State management routes - Nexus State Service
+          - path: /api/state(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: nexus-state
+                port:
+                  number: 8001
+          # Snapshot routes - Nexus State Service
+          - path: /api/snapshots(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: nexus-state
+                port:
+                  number: 8001
+          # API routes - FastAPI backend (workspace-kernel)
+          - path: /api(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: workspace-kernel
+                port:
+                  number: 8000
+          # Health check
+          - path: /health
+            pathType: Prefix
+            backend:
+              service:
+                name: workspace-kernel
+                port:
+                  number: 8000
+          # WebSocket endpoint
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: workspace-kernel
+                port:
+                  number: 8000
+
+---
+# Ingress for GraphStudio (React frontend)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nexus-frontend-ingress
+  namespace: nexus-python
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    cert-manager.io/cluster-issuer: letsencrypt-prod  # If using cert-manager
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - nexus.example.com  # Change to your domain
+      secretName: nexus-frontend-tls
+  rules:
+    - host: nexus.example.com  # Change to your domain
+      http:
+        paths:
+          # Frontend static files
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: graphstudio-frontend
+                port:
+                  number: 80

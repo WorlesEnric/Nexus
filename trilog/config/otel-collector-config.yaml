@@ -1,0 +1,127 @@
+# OpenTelemetry Collector Configuration for TriLog
+# This configuration receives logs from applications, validates them,
+# and exports to ClickHouse for storage.
+
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  # Batch processor for efficient exports
+  batch:
+    timeout: 1s
+    send_batch_size: 1000
+    send_batch_max_size: 2000
+
+  # Memory limiter to prevent OOM
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 512
+    spike_limit_mib: 128
+
+  # Resource processor to add common attributes
+  resource:
+    attributes:
+      - key: trilog.version
+        value: "1.1"
+        action: upsert
+      - key: deployment.environment
+        from_attribute: DEPLOYMENT_ENV
+        action: insert
+
+  # Transform processor for TriLog-specific transformations
+  transform:
+    log_statements:
+      - context: log
+        statements:
+          # Ensure obj_id is present
+          - set(attributes["trilog.validated"], true) where attributes["obj_id"] != nil
+          # Extract timestamp if not present
+          - set(attributes["event_timestamp"], observed_time_unix_nano) where attributes["event_timestamp"] == nil
+
+  # Filter processor to drop invalid logs
+  filter:
+    logs:
+      include:
+        match_type: regexp
+        record_attributes:
+          - key: obj_id
+            value: ".+"
+
+exporters:
+  # ClickHouse exporter for persistent storage
+  clickhouse:
+    endpoint: tcp://clickhouse:9000
+    database: trilog
+    username: ${CLICKHOUSE_USER:-default}
+    password: ${CLICKHOUSE_PASSWORD:-}
+    ttl_days: 90
+    logs_table_name: trilog_events
+    timeout: 10s
+    retry_on_failure:
+      enabled: true
+      initial_interval: 5s
+      max_interval: 30s
+      max_elapsed_time: 300s
+    sending_queue:
+      enabled: true
+      num_consumers: 4
+      queue_size: 5000
+
+  # Debug exporter for development
+  logging:
+    verbosity: detailed
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+  # File exporter for backup
+  file:
+    path: /var/log/trilog/events.json
+    rotation:
+      max_megabytes: 100
+      max_days: 7
+      max_backups: 3
+
+extensions:
+  # Health check extension
+  health_check:
+    endpoint: 0.0.0.0:13133
+    path: /health
+    tls:
+      enabled: false
+
+  # Performance profiler
+  pprof:
+    endpoint: 0.0.0.0:1777
+
+  # zPages for debugging
+  zpages:
+    endpoint: 0.0.0.0:55679
+
+service:
+  extensions: [health_check, pprof, zpages]
+  
+  pipelines:
+    # Main logs pipeline for TriLog events
+    logs/trilog:
+      receivers: [otlp]
+      processors: [memory_limiter, transform, filter, batch]
+      exporters: [clickhouse]
+
+    # Debug pipeline (development only)
+    logs/debug:
+      receivers: [otlp]
+      processors: [memory_limiter, batch]
+      exporters: [logging]
+
+  telemetry:
+    logs:
+      level: info
+      encoding: json
+    metrics:
+      level: detailed
+      address: 0.0.0.0:8888

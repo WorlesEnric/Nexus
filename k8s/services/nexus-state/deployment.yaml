@@ -1,0 +1,185 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexus-state
+  namespace: nexus-python
+  labels:
+    app: nexus-state
+    component: backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: nexus-state
+  template:
+    metadata:
+      labels:
+        app: nexus-state
+        component: backend
+    spec:
+      initContainers:
+      # Wait for PostgreSQL to be ready
+      - name: wait-for-postgres
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done;']
+      # Wait for Redis to be ready
+      - name: wait-for-redis
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z redis 6379; do echo waiting for redis; sleep 2; done;']
+      containers:
+      - name: nexus-state
+        image: nexus/nexus-state:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8001
+          name: http
+          protocol: TCP
+        env:
+        # Service Configuration
+        - name: SERVICE_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: STATE_SERVICE_NAME
+        - name: SERVICE_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: STATE_SERVICE_PORT
+        # Python environment
+        - name: PYTHONUNBUFFERED
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: PYTHONUNBUFFERED
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: LOG_LEVEL
+        # Database Configuration (async driver for nexus-state)
+        - name: DATABASE_URL
+          value: "postgresql+asyncpg://$(DATABASE_USER):$(DATABASE_PASSWORD)@$(DATABASE_HOST):$(DATABASE_PORT)/$(DATABASE_NAME)"
+        - name: DATABASE_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: DATABASE_HOST
+        - name: DATABASE_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: DATABASE_PORT
+        - name: DATABASE_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: DATABASE_NAME
+        - name: DATABASE_USER
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: DATABASE_USER
+        - name: DATABASE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nexus-secrets
+              key: DATABASE_PASSWORD
+        # Redis Configuration
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: REDIS_HOST
+        - name: REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: REDIS_PORT
+        - name: REDIS_DB
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: REDIS_DB
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: nexus-secrets
+              key: REDIS_PASSWORD
+        # Cache Configuration
+        - name: CACHE_TTL_SECONDS
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: CACHE_TTL_SECONDS
+        # Git Configuration
+        - name: GIT_WORKSPACE_ROOT
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: GIT_WORKSPACE_ROOT
+        # JWT Secret for authentication
+        - name: JWT_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: nexus-secrets
+              key: JWT_SECRET_KEY
+        # CORS Configuration
+        - name: CORS_ORIGINS
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: CORS_ORIGINS
+        # Telemetry / TriLog
+        - name: TRILOG_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: TRILOG_ENABLED
+        - name: OTEL_ENDPOINT
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: OTEL_ENDPOINT
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8001
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: state-snapshots
+          mountPath: /app/state-snapshots
+      volumes:
+      - name: state-snapshots
+        persistentVolumeClaim:
+          claimName: state-snapshots-pvc
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: state-snapshots-pvc
+  namespace: nexus-python
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 10Gi

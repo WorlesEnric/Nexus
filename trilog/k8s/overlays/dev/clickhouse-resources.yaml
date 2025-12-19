@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: trilog-clickhouse
+  namespace: trilog-system
+spec:
+  template:
+    spec:
+      containers:
+      - name: clickhouse
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      resources:
+        requests:
+          storage: 10Gi  # Reduced for dev
+  - metadata:
+      name: logs
+    spec:
+      resources:
+        requests:
+          storage: 2Gi  # Reduced for dev

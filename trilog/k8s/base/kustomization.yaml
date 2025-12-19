@@ -1,0 +1,23 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Resources (namespace applied separately)
+resources:
+  - rbac.yaml
+  - clickhouse/statefulset.yaml
+  - clickhouse/service.yaml
+  - clickhouse/configmap.yaml
+  - clickhouse/secret.yaml
+  - otel-collector/deployment.yaml
+  - otel-collector/service.yaml
+  - otel-collector/configmap.yaml
+  - otel-collector/hpa.yaml
+
+# Common labels for all resources
+commonLabels:
+  app.kubernetes.io/part-of: trilog
+  app.kubernetes.io/managed-by: kustomize
+
+# Common annotations
+commonAnnotations:
+  trilog.io/version: "1.1.0"

@@ -1,0 +1,143 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: workspace-kernel-config
+  namespace: nexus-python
+data:
+  DATABASE_URL: postgresql+asyncpg://nexus:nexus@postgres:5432/nexus
+  CORS_ORIGINS: http://localhost:5173,http://localhost:3000
+  GIT_WORKSPACE_DIR: /app/workspaces
+  TRILOG_ENABLED: "true"
+  OTEL_ENDPOINT: http://otel-collector:4318
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: workspace-kernel-secret
+  namespace: nexus-python
+type: Opaque
+stringData:
+  JWT_SECRET_KEY: your-secret-key-change-in-production  # Change in production!
+  OPENAI_API_KEY: ""  # Set if using OpenAI
+  ANTHROPIC_API_KEY: ""  # Set if using Anthropic
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: workspace-data-pvc
+  namespace: nexus-python
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 50Gi
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workspace-kernel
+  namespace: nexus-python
+  labels:
+    app: workspace-kernel
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: workspace-kernel
+  template:
+    metadata:
+      labels:
+        app: workspace-kernel
+    spec:
+      containers:
+        - name: workspace-kernel
+          image: nexus/workspace-kernel:latest  # Update with your registry
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+              name: http
+          envFrom:
+            - configMapRef:
+                name: workspace-kernel-config
+            - secretRef:
+                name: workspace-kernel-secret
+          volumeMounts:
+            - name: workspace-data
+              mountPath: /app/workspaces
+          resources:
+            requests:
+              memory: "512Mi"
+              cpu: "500m"
+            limits:
+              memory: "2Gi"
+              cpu: "2000m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+      volumes:
+        - name: workspace-data
+          persistentVolumeClaim:
+            claimName: workspace-data-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: workspace-kernel
+  namespace: nexus-python
+  labels:
+    app: workspace-kernel
+spec:
+  type: ClusterIP
+  selector:
+    app: workspace-kernel
+  ports:
+    - port: 8000
+      targetPort: 8000
+      protocol: TCP
+      name: http
+
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: workspace-kernel-hpa
+  namespace: nexus-python
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: workspace-kernel
+  minReplicas: 3
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80

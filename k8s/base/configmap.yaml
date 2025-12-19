@@ -1,0 +1,54 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nexus-config
+  namespace: nexus-python
+data:
+  # Environment
+  LOG_LEVEL: "debug"
+  DEBUG: "false"
+
+  # Python environment
+  PYTHONUNBUFFERED: "1"
+
+  # Workspace Kernel Configuration (Multi-Tenant)
+  MULTI_TENANT_MODE: "true"
+  MAX_WORKSPACES_PER_POD: "50"
+  IDLE_WORKSPACE_TIMEOUT_MS: "1800000"  # 30 minutes
+  AUTH_ENABLED: "true"
+
+  # Database Configuration
+  DATABASE_HOST: "postgres"
+  DATABASE_PORT: "5432"
+  DATABASE_NAME: "nexus"
+  DATABASE_USER: "nexus"
+
+  # Redis Configuration
+  REDIS_HOST: "redis"
+  REDIS_PORT: "6379"
+
+  # Service URLs
+  WORKSPACE_KERNEL_URL: "http://workspace-kernel:8000"
+  NEXUS_OS_URL: "http://nexus-os:4000"
+  NEXUS_STATE_URL: "http://nexus-state:8001"
+
+  # Git workspace configuration
+  GIT_WORKSPACE_DIR: "/app/workspaces"
+
+  # Nexus State Service Configuration
+  STATE_SERVICE_NAME: "nexus-state"
+  STATE_SERVICE_PORT: "8001"
+  CACHE_TTL_SECONDS: "1800"  # 30 minutes
+  GIT_WORKSPACE_ROOT: "/app/state-snapshots"
+  REDIS_DB: "0"
+
+  # CORS Configuration
+  CORS_ORIGINS: '["http://localhost:5173","http://localhost:3000","http://localhost:8080"]'
+
+  # Body Parser Limits
+  BODY_LIMIT: "10mb"
+
+  # Telemetry / TriLog
+  TRILOG_ENABLED: "true"
+  OTEL_ENDPOINT: "trilog-otel-collector.trilog-system.svc.cluster.local:4317"
+  DEPLOYMENT_ENV: "production"

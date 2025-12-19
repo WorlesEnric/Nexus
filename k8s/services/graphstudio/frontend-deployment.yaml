@@ -1,0 +1,57 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: graphstudio-frontend
+  namespace: nexus-python
+  labels:
+    app: graphstudio-frontend
+    component: frontend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: graphstudio-frontend
+  template:
+    metadata:
+      labels:
+        app: graphstudio-frontend
+        component: frontend
+    spec:
+      containers:
+      - name: graphstudio-frontend
+        image: nexus/graphstudio-frontend:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 80
+          name: http
+          protocol: TCP
+        env:
+        # Backend API URL (for runtime configuration)
+        # This can be injected at runtime via window.__ENV__ or build-time env vars
+        - name: VITE_API_URL
+          value: "http://api.nexus.example.com"
+        - name: VITE_WS_URL
+          value: "ws://api.nexus.example.com/ws"
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "200m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 10
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3

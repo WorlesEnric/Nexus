@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Base configuration
+bases:
+  - ../../base
+
+# Name prefix for staging environment
+namePrefix: staging-
+
+# Environment-specific labels
+commonLabels:
+  environment: staging
+  trilog.io/env: staging
+
+# Patches for staging environment - medium resources
+patchesStrategicMerge:
+  - clickhouse-resources.yaml
+  - otel-collector-replicas.yaml
+
+# Config map generator for environment-specific configs
+configMapGenerator:
+  - name: trilog-env-config
+    literals:
+      - ENVIRONMENT=staging
+      - LOG_LEVEL=info

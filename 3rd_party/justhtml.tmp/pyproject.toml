@@ -1,0 +1,104 @@
+[project]
+name = "justhtml"
+authors = [{ name = "Emil Stenström", email = "emil@emilstenstrom.se" }]
+version = "0.16.0"
+description = "A pure Python HTML5 parser that just works."
+readme = "README.md"
+requires-python = ">=3.10"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+
+[project.optional-dependencies]
+benchmark = [
+    "psutil",
+    "zstandard",
+    "html5lib",
+    "lxml",
+    "beautifulsoup4",
+    "selectolax",
+    "html5-parser",
+]
+dev = [
+    "ruff==0.14.7",
+    "coverage",
+    "build",
+    "twine",
+    "pre-commit",
+    "mypy>=1.0; platform_python_implementation != 'PyPy'",
+]
+
+[project.urls]
+Homepage = "https://github.com/emilstenstrom/justhtml"
+Issues = "https://github.com/emilstenstrom/justhtml/issues"
+
+[project.scripts]
+justhtml = "justhtml.__main__:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/justhtml"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 119
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    "ANN",
+    "TD",
+    "D",
+    "EM",
+    "TRY003",
+    "T201",
+    "FBT",
+    "E501",
+    "PLR",
+    "C",
+    "SIM",
+    "ARG",
+    "ERA001",
+    "SLF001",
+    "S105",
+    "COM812",
+    "ISC001",
+    "EXE001",
+]
+
+[tool.ruff.lint.extend-per-file-ignores]
+"tests/**/*.py" = ["S101", "PT"]  # S101: allow assert, PT: we use unittest not pytest
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_ignores = false
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+show_error_codes = true
+files = ["src/justhtml"]
+
+[tool.coverage.run]
+branch = true
+source = ["src/justhtml"]
+
+[tool.coverage.report]
+fail_under = 100
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "def __init__",
+    "__slots__",
+]

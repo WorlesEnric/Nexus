@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: graphstudio-backend
+  namespace: nexus-python
+  labels:
+    app: graphstudio-backend
+    component: auth-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: graphstudio-backend
+  template:
+    metadata:
+      labels:
+        app: graphstudio-backend
+        component: auth-service
+    spec:
+      initContainers:
+      # Wait for PostgreSQL to be ready
+      - name: wait-for-postgres
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done;']
+      containers:
+      - name: graphstudio-backend
+        image: nexus/graphstudio-backend:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 3000
+          name: http
+          protocol: TCP
+        env:
+        # From ConfigMap
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: LOG_LEVEL
+        - name: PYTHONUNBUFFERED
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: PYTHONUNBUFFERED
+        - name: CORS_ORIGINS
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: CORS_ORIGINS
+        - name: TRILOG_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: TRILOG_ENABLED
+        - name: OTEL_ENDPOINT
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: OTEL_ENDPOINT
+        # From Secrets
+        - name: JWT_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: nexus-secrets
+              key: JWT_SECRET_KEY
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: nexus-secrets
+              key: DATABASE_URL
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3

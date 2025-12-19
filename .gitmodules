@@ -1,0 +1,6 @@
+[submodule "apps/GraphStudio"]
+	path = apps/GraphStudio
+	url = https://github.com/WorlesEnric/GraphStudio.git
+[submodule "3rd_party/justhtml"]
+	path = 3rd_party/justhtml
+	url = https://github.com/EmilStenstrom/justhtml.git

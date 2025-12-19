@@ -1,0 +1,55 @@
+# GitHub Actions workflow to validate TypeScript types are up-to-date
+name: Type Generation Check
+
+on:
+  pull_request:
+    paths:
+      - 'packages/nexus-protocol/nexus_protocol/**'
+      - 'apps/GraphStudio/src/types/**'
+  push:
+    branches:
+      - main
+    paths:
+      - 'packages/nexus-protocol/nexus_protocol/**'
+      - 'apps/GraphStudio/src/types/**'
+
+jobs:
+  check-types:
+    name: Validate Generated Types
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        run: |
+          pip install -e packages/nexus-protocol
+
+      - name: Run type generation check
+        run: |
+          ./scripts/check-types.sh
+
+      - name: Build GraphStudio
+        if: success()
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: apps/GraphStudio/package-lock.json
+
+      - name: Install frontend dependencies
+        run: |
+          cd apps/GraphStudio
+          npm ci
+
+      - name: Build frontend
+        run: |
+          cd apps/GraphStudio
+          npm run build

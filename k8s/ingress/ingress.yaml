@@ -1,0 +1,58 @@
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nexus-ingress
+  namespace: nexus-python
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"  # Set to "true" in production
+    nginx.ingress.kubernetes.io/websocket-services: workspace-kernel
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    # cert-manager.io/cluster-issuer: letsencrypt-prod  # Uncomment for production TLS
+spec:
+  ingressClassName: nginx
+  # tls:  # Uncomment for production TLS
+  #   - hosts:
+  #       - nexus-python.example.com
+  #     secretName: nexus-tls
+  rules:
+    # Frontend
+    - host: nexus-python.local  # Change to your domain in production
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: graphstudio-frontend
+                port:
+                  number: 80
+    # Backend API
+    - host: api.nexus-python.local  # Change to your domain in production
+      http:
+        paths:
+          # Workspace Kernel API
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: workspace-kernel
+                port:
+                  number: 8000
+          # Auth/Subscription API
+          - path: /auth
+            pathType: Prefix
+            backend:
+              service:
+                name: graphstudio-backend
+                port:
+                  number: 3000
+          - path: /subscription
+            pathType: Prefix
+            backend:
+              service:
+                name: graphstudio-backend
+                port:
+                  number: 3000

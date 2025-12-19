@@ -1,0 +1,112 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: trilog-clickhouse
+  namespace: trilog-system
+  labels:
+    app: trilog-clickhouse
+    app.kubernetes.io/name: clickhouse
+    app.kubernetes.io/component: storage
+    app.kubernetes.io/part-of: trilog
+spec:
+  serviceName: trilog-clickhouse
+  replicas: 1
+  selector:
+    matchLabels:
+      app: trilog-clickhouse
+  template:
+    metadata:
+      labels:
+        app: trilog-clickhouse
+        app.kubernetes.io/name: clickhouse
+        app.kubernetes.io/component: storage
+        app.kubernetes.io/part-of: trilog
+    spec:
+      containers:
+      - name: clickhouse
+        image: clickhouse/clickhouse-server:23.12
+        ports:
+        - containerPort: 8123
+          name: http
+          protocol: TCP
+        - containerPort: 9000
+          name: native
+          protocol: TCP
+        - containerPort: 9009
+          name: interserver
+          protocol: TCP
+        env:
+        - name: CLICKHOUSE_DB
+          value: trilog
+        - name: CLICKHOUSE_USER
+          valueFrom:
+            secretKeyRef:
+              name: trilog-clickhouse-secret
+              key: username
+        - name: CLICKHOUSE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: trilog-clickhouse-secret
+              key: password
+        - name: CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT
+          value: "1"
+        volumeMounts:
+        - name: data
+          mountPath: /var/lib/clickhouse
+        - name: logs
+          mountPath: /var/log/clickhouse-server
+        - name: config
+          mountPath: /docker-entrypoint-initdb.d/init.sql
+          subPath: init.sql
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "1000m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        livenessProbe:
+          exec:
+            command:
+            - clickhouse-client
+            - --query
+            - SELECT 1
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          exec:
+            command:
+            - clickhouse-client
+            - --query
+            - SELECT 1
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: config
+        configMap:
+          name: trilog-clickhouse-config
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+      labels:
+        app: trilog-clickhouse
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: standard
+      resources:
+        requests:
+          storage: 20Gi
+  - metadata:
+      name: logs
+      labels:
+        app: trilog-clickhouse
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: standard
+      resources:
+        requests:
+          storage: 5Gi

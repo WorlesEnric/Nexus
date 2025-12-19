@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: trilog-otel-collector
+  namespace: trilog-system
+spec:
+  replicas: 1  # Single replica for dev
+  template:
+    spec:
+      containers:
+      - name: otel-collector
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: trilog-otel-collector-hpa
+  namespace: trilog-system
+spec:
+  minReplicas: 1  # Single replica for dev
+  maxReplicas: 3  # Max 3 for dev

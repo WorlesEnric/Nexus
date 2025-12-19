@@ -1,0 +1,26 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Base configuration
+bases:
+  - ../../base
+
+# Name prefix for production environment
+namePrefix: prod-
+
+# Environment-specific labels
+commonLabels:
+  environment: production
+  trilog.io/env: production
+
+# Patches for production environment - full resources
+patchesStrategicMerge:
+  - clickhouse-resources.yaml
+  - otel-collector-replicas.yaml
+
+# Config map generator for environment-specific configs
+configMapGenerator:
+  - name: trilog-env-config
+    literals:
+      - ENVIRONMENT=production
+      - LOG_LEVEL=error

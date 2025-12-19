@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nexus-os
+  namespace: nexus
+  labels:
+    app: nexus-os
+    component: ai-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nexus-os
+  template:
+    metadata:
+      labels:
+        app: nexus-os
+        component: ai-service
+    spec:
+      containers:
+      - name: nexus-os
+        image: localhost:5001/nexus/nexus-os:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 4000
+          name: http
+          protocol: TCP
+        env:
+        - name: NODE_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: NODE_ENV
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: LOG_LEVEL
+        - name: PORT
+          value: "4000"
+        - name: WORKSPACE_KERNEL_URL
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: WORKSPACE_KERNEL_URL
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 4000
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 4000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3

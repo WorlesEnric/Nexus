@@ -1,0 +1,149 @@
+# TriLog Docker Compose Configuration
+# This sets up the complete TriLog infrastructure:
+# - OpenTelemetry Collector for receiving and processing telemetry
+# - ClickHouse for time-series storage
+# - Optional: Grafana for visualization
+
+version: '3.8'
+
+services:
+  # ============================================================================
+  # OpenTelemetry Collector
+  # Receives telemetry from applications and forwards to ClickHouse
+  # ============================================================================
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.91.0
+    container_name: trilog-otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./config/otel-collector-config.yaml:/etc/otel-collector-config.yaml:ro
+      - trilog-logs:/var/log/trilog
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "13133:13133" # Health check
+      - "8888:8888"   # Metrics
+      - "55679:55679" # zPages (debugging)
+    environment:
+      - DEPLOYMENT_ENV=${DEPLOYMENT_ENV:-development}
+      - CLICKHOUSE_USER=${CLICKHOUSE_USER:-default}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-}
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - trilog-network
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:13133/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # ============================================================================
+  # ClickHouse
+  # Time-series database for storing TriLog events
+  # ============================================================================
+  clickhouse:
+    image: clickhouse/clickhouse-server:23.12
+    container_name: trilog-clickhouse
+    volumes:
+      - clickhouse-data:/var/lib/clickhouse
+      - clickhouse-logs:/var/log/clickhouse-server
+      - ./config/clickhouse-init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    ports:
+      - "8123:8123"   # HTTP interface
+      - "9000:9000"   # Native TCP
+      - "9009:9009"   # Interserver HTTP
+    environment:
+      - CLICKHOUSE_USER=${CLICKHOUSE_USER:-default}
+      - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-}
+      - CLICKHOUSE_DB=trilog
+      - CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT=1
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    restart: unless-stopped
+    networks:
+      - trilog-network
+    healthcheck:
+      test: ["CMD", "clickhouse-client", "--query", "SELECT 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # ============================================================================
+  # Grafana (Optional)
+  # Visualization and dashboards
+  # ============================================================================
+  grafana:
+    image: grafana/grafana:10.2.3
+    container_name: trilog-grafana
+    profiles:
+      - monitoring
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_INSTALL_PLUGINS=grafana-clickhouse-datasource
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    depends_on:
+      - clickhouse
+    restart: unless-stopped
+    networks:
+      - trilog-network
+
+  # ============================================================================
+  # Redis (Optional)
+  # For caching reconstruction results
+  # ============================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: trilog-redis
+    profiles:
+      - caching
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    networks:
+      - trilog-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+# ============================================================================
+# Networks
+# ============================================================================
+networks:
+  trilog-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+# ============================================================================
+# Volumes
+# ============================================================================
+volumes:
+  clickhouse-data:
+    driver: local
+  clickhouse-logs:
+    driver: local
+  trilog-logs:
+    driver: local
+  grafana-data:
+    driver: local
+  redis-data:
+    driver: local

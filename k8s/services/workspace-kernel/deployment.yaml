@@ -1,0 +1,138 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workspace-kernel
+  namespace: nexus-python
+  labels:
+    app: workspace-kernel
+    component: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: workspace-kernel
+  template:
+    metadata:
+      labels:
+        app: workspace-kernel
+        component: backend
+    spec:
+      initContainers:
+      # Wait for PostgreSQL to be ready
+      - name: wait-for-postgres
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z postgres 5432; do echo waiting for postgres; sleep 2; done;']
+      # TODO: Add database migration init container if needed
+      # - name: alembic-migrate
+      #   image: nexus/workspace-kernel:latest
+      #   command: ['alembic', 'upgrade', 'head']
+      containers:
+      - name: workspace-kernel
+        image: nexus/workspace-kernel:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        env:
+        # From ConfigMap
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: LOG_LEVEL
+        - name: PYTHONUNBUFFERED
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: PYTHONUNBUFFERED
+        - name: MULTI_TENANT_MODE
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: MULTI_TENANT_MODE
+        - name: MAX_WORKSPACES_PER_POD
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: MAX_WORKSPACES_PER_POD
+        - name: IDLE_WORKSPACE_TIMEOUT_MS
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: IDLE_WORKSPACE_TIMEOUT_MS
+        - name: AUTH_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: AUTH_ENABLED
+        - name: CORS_ORIGINS
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: CORS_ORIGINS
+        - name: GIT_WORKSPACE_DIR
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: GIT_WORKSPACE_DIR
+        - name: TRILOG_ENABLED
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: TRILOG_ENABLED
+        - name: OTEL_ENDPOINT
+          valueFrom:
+            configMapKeyRef:
+              name: nexus-config
+              key: OTEL_ENDPOINT
+        # From Secrets
+        - name: JWT_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: nexus-secrets
+              key: JWT_SECRET_KEY
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: nexus-secrets
+              key: DATABASE_URL
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: nexus-secrets
+              key: OPENAI_API_KEY
+        - name: ANTHROPIC_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: nexus-secrets
+              key: ANTHROPIC_API_KEY
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "2000m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+        volumeMounts:
+        - name: workspaces
+          mountPath: /app/workspaces
+      volumes:
+      - name: workspaces
+        emptyDir: {}

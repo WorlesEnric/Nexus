@@ -1,0 +1,105 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14", "3.15-dev", "pypy3.11"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Checkout html5lib-tests
+        run: |
+          cd ..
+          git clone https://github.com/html5lib/html5lib-tests.git
+
+      - name: Setup test symlinks
+        run: |
+          cd tests
+          ln -s ../../html5lib-tests/tokenizer html5lib-tests-tokenizer
+          ln -s ../../html5lib-tests/tree-construction html5lib-tests-tree
+          ln -s ../../html5lib-tests/serializer html5lib-tests-serializer
+          ln -s ../../html5lib-tests/encoding html5lib-tests-encoding
+
+      - name: Run pre-commit
+        uses: pre-commit/action@v3.0.1
+        env:
+          SKIP: mypy
+
+      - name: Run tests
+        run: python run_tests.py
+
+      - name: Run mypy
+        if: matrix.python-version == '3.12'
+        run: mypy
+
+  test-pyodide:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build wheel
+        run: |
+          pip install build
+          python -m build --wheel
+
+      - name: Test in Pyodide
+        run: |
+          npm install pyodide
+          cat > test_pyodide.js << 'SCRIPT'
+          const { loadPyodide } = require("pyodide");
+          const fs = require("fs");
+          const path = require("path");
+
+          async function main() {
+            const pyodide = await loadPyodide();
+            await pyodide.loadPackage("micropip");
+            const micropip = pyodide.pyimport("micropip");
+
+            // Find the wheel and install via file URL
+            const wheel = fs.readdirSync("dist").find(f => f.endsWith(".whl"));
+            const wheelPath = path.resolve("dist", wheel);
+            await micropip.install("file://" + wheelPath);
+
+            // Test basic parsing
+            const result = pyodide.runPython(
+              'from justhtml import JustHTML; doc = JustHTML("<html><body><p>Hello</p></body></html>"); doc.root.children[0].name'
+            );
+            if (result !== "html") {
+              throw new Error("Expected 'html', got '" + result + "'");
+            }
+            console.log("Pyodide test passed!");
+          }
+
+          main().catch(e => { console.error(e); process.exit(1); });
+          SCRIPT
+          node test_pyodide.js

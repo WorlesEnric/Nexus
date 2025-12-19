@@ -1,0 +1,74 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: graphstudio-backend
+  namespace: nexus
+  labels:
+    app: graphstudio-backend
+    component: backend
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: graphstudio-backend
+  template:
+    metadata:
+      labels:
+        app: graphstudio-backend
+        component: backend
+    spec:
+      containers:
+      - name: graphstudio-backend
+        image: localhost:5001/nexus/graphstudio-backend:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8000
+          name: http
+          protocol: TCP
+        env:
+        # Database configuration
+        - name: DATABASE_URL
+          value: "sqlite:///:memory:"
+        # TriLog / OpenTelemetry configuration
+        - name: OTEL_ENDPOINT
+          value: "otel-collector.trilog-system.svc.cluster.local:4317"
+        - name: DEPLOYMENT_ENV
+          value: "production"
+        # API configuration
+        - name: SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: graphstudio-secrets
+              key: secret-key
+              optional: true
+        - name: ACCESS_TOKEN_EXPIRE_MINUTES
+          value: "1440"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        volumeMounts:
+        - name: data
+          mountPath: /data
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: data
+        emptyDir: {}

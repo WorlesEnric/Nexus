@@ -1,0 +1,17 @@
+fastapi
+uvicorn
+sqlalchemy
+psycopg2-binary
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt<4.1.0
+python-multipart
+python-dotenv
+
+# TriLog & OpenTelemetry
+opentelemetry-api>=1.20.0
+opentelemetry-sdk>=1.20.0
+opentelemetry-exporter-otlp-proto-grpc>=1.20.0
+clickhouse-driver>=0.2.6
+pydantic>=2.0.0
+email-validator>=2.0.0

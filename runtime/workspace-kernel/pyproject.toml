@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "workspace-kernel"
+version = "1.0.0"
+description = "FastAPI service for Nexus workspace and panel management"
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [
+    {name = "Nexus Team"},
+]
+license = {text = "MIT"}
+
+dependencies = [
+    "nexus-protocol>=1.0.0",
+    "nexus-core>=1.0.0",
+    "fastapi>=0.108.0",
+    "uvicorn[standard]>=0.25.0",
+    "pydantic>=2.5.0,<3.0.0",
+    "pydantic-settings>=2.1.0",
+    "pydantic[email]>=2.5.0",  # Email validation
+    "sqlalchemy>=2.0.0",
+    "alembic>=1.13.0",
+    "asyncpg>=0.29.0",  # PostgreSQL async driver
+    "python-jose[cryptography]>=3.3.0",  # JWT
+    "passlib[bcrypt]>=1.7.4",  # Password hashing
+    "python-multipart>=0.0.6",  # Form data
+    "websockets>=12.0",
+    "gitpython>=3.1.40",
+    "redis>=5.0.0",  # Optional cache
+    # trilog is installed separately as a local package
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4.0",
+    "pytest-cov>=4.1.0",
+    "pytest-asyncio>=0.21.0",
+    "httpx>=0.25.0",  # For testing FastAPI
+    "black>=23.7.0",
+    "ruff>=0.0.285",
+    "mypy>=1.5.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["workspace_kernel*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --cov=workspace_kernel --cov-report=term-missing"
+asyncio_mode = "auto"
+
+[tool.black]
+line-length = 100
+target-version = ["py311"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+select = ["E", "F", "I", "N", "W", "UP"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
